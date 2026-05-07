@@ -52,6 +52,7 @@ class GoldFactEvaluation:
 class EvaluationResult:
     question_id: str
     mode: ResearchMode
+    evaluation_mode: Literal["heuristic", "llm"]
     gold_fact_evaluations: list[GoldFactEvaluation]
     gold_fact_recall: float
     unsupported_claim_count: int
@@ -64,5 +65,6 @@ class EvaluationResult:
 class ExperimentResult:
     metadata: dict
     generated_protocol: ResearchProtocol
+    protocol_provenance: dict
     per_question: list[dict]
     summary_metrics: dict

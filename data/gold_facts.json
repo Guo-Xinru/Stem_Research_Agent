@@ -5,28 +5,39 @@
     "facts": [
       {
         "id": "q1_f1",
-        "fact": "Long-horizon tasks expose planning drift across many intermediate steps.",
-        "keywords": ["long", "planning drift", "steps"]
+        "fact": "Long-horizon coding-agent failures often involve error propagation across dependent engineering steps.",
+        "keywords": ["error propagation", "step dependency", "long-horizon task"],
+        "supported_by_sources": ["src_q1_error_compounding"]
       },
       {
         "id": "q1_f2",
-        "fact": "Failures can compound when tool or test feedback is missed.",
-        "keywords": ["tool", "test", "feedback"]
+        "fact": "Locally reasonable actions can still produce global drift when intermediate work is not checked against the user's intent.",
+        "keywords": ["global drift", "local action", "intent alignment", "intermediate verification"],
+        "supported_by_sources": ["src_q1_error_compounding", "src_q1_human_escalation"]
       },
       {
         "id": "q1_f3",
-        "fact": "Explicit state tracking helps reduce loss of task intent.",
-        "keywords": ["state tracking", "intent"]
+        "fact": "Specification gaps and hidden constraints make it difficult to judge whether a coding-agent patch satisfies real requirements.",
+        "keywords": ["specification gap", "hidden constraint", "real requirement", "underspecification"],
+        "supported_by_sources": ["src_q1_specification_gap"]
       },
       {
         "id": "q1_f4",
-        "fact": "Frequent verification or tests are practical mitigations.",
-        "keywords": ["verification", "tests"]
+        "fact": "Passing visible tests is an insufficient completion signal because tests may miss semantic correctness, architectural fit, or intended behavior.",
+        "keywords": ["completion signal", "visible test", "semantic correctness", "architectural fit"],
+        "supported_by_sources": ["src_q1_specification_gap"]
       },
       {
         "id": "q1_f5",
-        "fact": "Claims about autonomy should be stated with uncertainty.",
-        "keywords": ["autonomy", "uncertainty"]
+        "fact": "Uncertainty recognition and escalation are needed when ambiguity makes continued autonomous editing risky.",
+        "keywords": ["uncertainty recognition", "escalation", "ambiguity", "autonomous editing risk"],
+        "supported_by_sources": ["src_q1_human_escalation"]
+      },
+      {
+        "id": "q1_f6",
+        "fact": "Accumulated drift, underspecification, and weak verification signals interact, so long-horizon coding agents need verification and clarification checkpoints.",
+        "keywords": ["accumulated drift", "underspecification", "weak verification", "clarification checkpoint"],
+        "supported_by_sources": ["src_q1_error_compounding", "src_q1_specification_gap", "src_q1_human_escalation"]
       }
     ]
   },
@@ -36,28 +47,39 @@
     "facts": [
       {
         "id": "q2_f1",
-        "fact": "LLM agents are limited by finite and shifting context windows.",
-        "keywords": ["context", "windows"]
+        "fact": "LLM agents must preserve task-relevant state while handling accumulated conversation history, tool outputs, plans, errors, and observations.",
+        "keywords": ["task-relevant state", "context accumulation", "tool output", "agent state"],
+        "supported_by_sources": ["src_q2_context_noise"]
       },
       {
         "id": "q2_f2",
-        "fact": "Summaries can help but may omit important details.",
-        "keywords": ["summaries", "omit", "details"]
+        "fact": "Stale assumptions and irrelevant context can pollute later decisions by distracting from the constraints that currently matter.",
+        "keywords": ["context pollution", "stale assumptions", "irrelevant context", "decision focus"],
+        "supported_by_sources": ["src_q2_context_noise", "src_q2_retrieval_relevance"]
       },
       {
         "id": "q2_f3",
-        "fact": "Explicit state tracking can preserve goals and decisions.",
-        "keywords": ["state tracking", "goals", "decisions"]
+        "fact": "Context compression can lose later-important details such as exact constraints, failed attempts, file paths, or decision assumptions.",
+        "keywords": ["compression loss", "exact constraint", "failed attempt", "decision assumption"],
+        "supported_by_sources": ["src_q2_context_compression"]
       },
       {
         "id": "q2_f4",
-        "fact": "Retrieval must be disciplined to avoid stale or irrelevant context.",
-        "keywords": ["retrieval", "stale", "context"]
+        "fact": "Summaries can preserve the broad goal while losing debugging evidence needed to diagnose a specific failure.",
+        "keywords": ["summary loss", "debugging evidence", "specific failure", "broad goal"],
+        "supported_by_sources": ["src_q2_context_compression"]
       },
       {
         "id": "q2_f5",
-        "fact": "Context practices should be verified against task outcomes.",
-        "keywords": ["context", "verified", "outcomes"]
+        "fact": "Retrieval can introduce irrelevant, outdated, duplicated, or superficially related information into the agent context.",
+        "keywords": ["retrieval noise", "outdated information", "duplicate context", "relevance failure"],
+        "supported_by_sources": ["src_q2_retrieval_relevance"]
+      },
+      {
+        "id": "q2_f6",
+        "fact": "Effective context management requires keep, discard, and re-check decisions because more context is not automatically better.",
+        "keywords": ["context selection", "keep discard re-check", "context overload", "relevance control"],
+        "supported_by_sources": ["src_q2_context_noise", "src_q2_context_compression", "src_q2_retrieval_relevance"]
       }
     ]
   },
@@ -67,28 +89,39 @@
     "facts": [
       {
         "id": "q3_f1",
-        "fact": "Tool schemas can be brittle when arguments are ambiguous or underspecified.",
-        "keywords": ["tool", "schemas", "ambiguous"]
+        "fact": "Tool-using agents can fail through invalid arguments, schema misunderstanding, or incorrect tool-call ordering.",
+        "keywords": ["invalid call", "schema mismatch", "tool order", "argument error"],
+        "supported_by_sources": ["src_q3_malformed_tool_calls"]
       },
       {
         "id": "q3_f2",
-        "fact": "Agents should inspect execution feedback before continuing.",
-        "keywords": ["execution", "feedback", "continuing"]
+        "fact": "A reasonable high-level plan can fail at the tool interface when the intended action does not match the tool's required form.",
+        "keywords": ["interface mismatch", "intended action", "high-level plan", "tool constraint"],
+        "supported_by_sources": ["src_q3_malformed_tool_calls"]
       },
       {
         "id": "q3_f3",
-        "fact": "Retries should distinguish transient errors from invalid tool calls.",
-        "keywords": ["retries", "transient", "invalid"]
+        "fact": "Syntactically valid tool calls can fail when the runtime environment differs from the agent's assumptions.",
+        "keywords": ["runtime mismatch", "valid call", "environment assumption", "execution failure"],
+        "supported_by_sources": ["src_q3_environment_mismatch"]
       },
       {
         "id": "q3_f4",
-        "fact": "Tests and validation reduce tool-related failures.",
-        "keywords": ["tests", "validation", "failures"]
+        "fact": "Environment-related tool failures can involve dependencies, unavailable files, permissions, paths, stale state, network restrictions, or test mismatches.",
+        "keywords": ["dependency failure", "permission issue", "path mismatch", "network restriction", "test mismatch"],
+        "supported_by_sources": ["src_q3_environment_mismatch"]
       },
       {
         "id": "q3_f5",
-        "fact": "Strong claims should cite tool logs, evaluations, or other evidence.",
-        "keywords": ["claims", "tool logs", "evidence"]
+        "fact": "Robust agents must diagnose failed tool calls instead of repeating the same command or patching symptoms without finding the root cause.",
+        "keywords": ["recovery failure", "root-cause diagnosis", "repeat command", "symptom patching"],
+        "supported_by_sources": ["src_q3_error_recovery"]
+      },
+      {
+        "id": "q3_f6",
+        "fact": "Tool-use brittleness arises from interactions between intended actions, tool interfaces, runtime environments, and recovery behavior.",
+        "keywords": ["tool-use interaction", "interface mismatch", "runtime mismatch", "recovery behavior"],
+        "supported_by_sources": ["src_q3_malformed_tool_calls", "src_q3_environment_mismatch", "src_q3_error_recovery"]
       }
     ]
   }

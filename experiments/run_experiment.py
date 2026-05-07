@@ -12,7 +12,7 @@ from stem_research.evaluator import Evaluator
 from stem_research.io_utils import load_json, timestamped_run_path, write_json
 from stem_research.researcher import SpecializedResearcher
 from stem_research.schemas import ExperimentResult
-from stem_research.stem import Stem
+from stem_research.stem import Stem, validate_protocol
 
 
 TASK_CLASS_DESCRIPTION = (
@@ -35,16 +35,24 @@ def main(argv: Sequence[str] | None = None) -> Path:
     selected_questions = _select_questions(questions, args.limit)
     gold_by_question = _gold_by_question_id(gold_facts)
 
-    # generate the stem protocol
-    protocol = Stem().generate_protocol(
+    stem = Stem()
+    protocol = stem.generate_protocol(
         task_class_description=TASK_CLASS_DESCRIPTION,
+        solved_examples=solved_examples,
+        rubric=rubric,
+        protocol_mode=args.protocol_mode,
+    )
+    validate_protocol(protocol)
+    protocol_provenance = _protocol_provenance(
+        stem_metadata=stem.last_protocol_metadata,
+        protocol_mode=args.protocol_mode,
         solved_examples=solved_examples,
         rubric=rubric,
     )
 
     # create researcher and evaluator instances
     researcher = SpecializedResearcher()
-    evaluator = Evaluator()
+    evaluator = Evaluator(eval_mode=args.eval_mode)
 
     per_question = []
     for question in selected_questions:
@@ -64,8 +72,20 @@ def main(argv: Sequence[str] | None = None) -> Path:
             protocol=protocol,
         )
         # evaluations against gold facts
-        baseline_evaluation = evaluator.evaluate(question, baseline_output, gold)
-        specialized_evaluation = evaluator.evaluate(question, specialized_output, gold)
+        baseline_evaluation = evaluator.evaluate(
+            question,
+            baseline_output,
+            gold,
+            rubric=rubric,
+            source_snippets=selected_snippets,
+        )
+        specialized_evaluation = evaluator.evaluate(
+            question,
+            specialized_output,
+            gold,
+            rubric=rubric,
+            source_snippets=selected_snippets,
+        )
 
         per_question.append(
             {
@@ -83,10 +103,13 @@ def main(argv: Sequence[str] | None = None) -> Path:
         metadata={
             "experiment": "deterministic_smoke_test",
             "limit": len(selected_questions),
-            "uses_live_openai_api": False,
+            "protocol_mode": args.protocol_mode,
+            "eval_mode": args.eval_mode,
+            "uses_live_openai_api": args.protocol_mode == "live" or args.eval_mode == "llm",
             "uses_live_web_search": False,
         },
         generated_protocol=protocol,
+        protocol_provenance=protocol_provenance,
         per_question=per_question,
         summary_metrics=_summary_metrics(per_question),
     )
@@ -101,6 +124,18 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the StemResearch smoke experiment.")
     parser.add_argument("--limit", type=int, default=None, help="Maximum number of questions to run.")
     parser.add_argument("--output-dir", type=Path, default=Path("runs"), help="Directory for JSON results.")
+    parser.add_argument(
+        "--protocol-mode",
+        choices=("fixture", "live"),
+        default="fixture",
+        help="Use the deterministic fixture protocol or generate it with OpenAI.",
+    )
+    parser.add_argument(
+        "--eval-mode",
+        choices=("heuristic", "llm"),
+        default="heuristic",
+        help="Use deterministic heuristic evaluation or LLM-assisted semantic evaluation.",
+    )
     return parser.parse_args(argv)
 
 
@@ -130,6 +165,23 @@ def _select_source_snippets(source_snippets: list[dict], question_id: str) -> li
     if not selected:
         raise ValueError(f"No source snippets found for question id: {question_id}")
     return selected
+
+
+def _protocol_provenance(
+    *,
+    stem_metadata: dict,
+    protocol_mode: str,
+    solved_examples: list[dict],
+    rubric: dict,
+) -> dict:
+    return {
+        "generated_by": stem_metadata.get("generated_by", protocol_mode),
+        "model": stem_metadata.get("model"),
+        "solved_examples_count": len(solved_examples),
+        "rubric_used": bool(rubric),
+        "task_class_description_used": TASK_CLASS_DESCRIPTION,
+        "validated": True,
+    }
 
 
 def _summary_metrics(per_question: list[dict]) -> dict:

@@ -1,0 +1,20 @@
+{
+  "scoring_rules": {
+    "gold_fact_recall": {
+      "addressed": 1.0,
+      "partially_addressed": 0.5,
+      "not_addressed": 0.0,
+      "description": "Average explicit gold fact coverage labels. Holistic 1-10 scoring is not used."
+    },
+    "citation_support": {
+      "description": "Major claims should have claim-level citation references. Fixture citations are acceptable only for the smoke test."
+    },
+    "unsupported_claim_count": {
+      "description": "Count major claims that do not have a matching claim-level citation reference."
+    },
+    "source_quality_notes": {
+      "description": "Record whether sources are fixture/mock, primary, secondary, or weak. Do not convert this into a vague holistic score."
+    }
+  },
+  "holistic_1_to_10_scoring": "not_used"
+}

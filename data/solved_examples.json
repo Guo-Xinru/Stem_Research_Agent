@@ -1,0 +1,29 @@
+[
+  {
+    "id": "example_1",
+    "question": "Why do coding agents lose reliability on large refactors?",
+    "outline": [
+      "Separate planning drift from execution errors.",
+      "Check tool results and tests after each important step.",
+      "State which claims are supported by evidence and which remain uncertain."
+    ]
+  },
+  {
+    "id": "example_2",
+    "question": "How should an LLM agent manage context over a long debugging session?",
+    "outline": [
+      "Track the current goal, constraints, and files already inspected.",
+      "Use summaries cautiously because they can drop important details.",
+      "Re-read source files when a decision depends on exact code."
+    ]
+  },
+  {
+    "id": "example_3",
+    "question": "What makes agent tool use fail in practice?",
+    "outline": [
+      "Identify schema mismatch, unchecked errors, and stale assumptions.",
+      "Use validation and clear error handling before continuing.",
+      "Avoid treating a successful tool call as proof that the result is correct."
+    ]
+  }
+]

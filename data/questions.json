@@ -1,0 +1,14 @@
+[
+  {
+    "id": "q1_long_horizon_failures",
+    "question": "Why do coding agents fail on long-horizon software engineering tasks, and what mitigations are most practical?"
+  },
+  {
+    "id": "q2_context_management",
+    "question": "What context management practices make LLM agents more reliable during multi-step engineering work?"
+  },
+  {
+    "id": "q3_brittle_tool_use",
+    "question": "Why is tool use brittle in autonomous agents, and how can engineering teams reduce tool-related failures?"
+  }
+]

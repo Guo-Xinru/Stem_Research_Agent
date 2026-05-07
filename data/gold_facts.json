@@ -1,0 +1,95 @@
+[
+  {
+    "question_id": "q1_long_horizon_failures",
+    "review_status": "needs_manual_review",
+    "facts": [
+      {
+        "id": "q1_f1",
+        "fact": "Long-horizon tasks expose planning drift across many intermediate steps.",
+        "keywords": ["long", "planning drift", "steps"]
+      },
+      {
+        "id": "q1_f2",
+        "fact": "Failures can compound when tool or test feedback is missed.",
+        "keywords": ["tool", "test", "feedback"]
+      },
+      {
+        "id": "q1_f3",
+        "fact": "Explicit state tracking helps reduce loss of task intent.",
+        "keywords": ["state tracking", "intent"]
+      },
+      {
+        "id": "q1_f4",
+        "fact": "Frequent verification or tests are practical mitigations.",
+        "keywords": ["verification", "tests"]
+      },
+      {
+        "id": "q1_f5",
+        "fact": "Claims about autonomy should be stated with uncertainty.",
+        "keywords": ["autonomy", "uncertainty"]
+      }
+    ]
+  },
+  {
+    "question_id": "q2_context_management",
+    "review_status": "needs_manual_review",
+    "facts": [
+      {
+        "id": "q2_f1",
+        "fact": "LLM agents are limited by finite and shifting context windows.",
+        "keywords": ["context", "windows"]
+      },
+      {
+        "id": "q2_f2",
+        "fact": "Summaries can help but may omit important details.",
+        "keywords": ["summaries", "omit", "details"]
+      },
+      {
+        "id": "q2_f3",
+        "fact": "Explicit state tracking can preserve goals and decisions.",
+        "keywords": ["state tracking", "goals", "decisions"]
+      },
+      {
+        "id": "q2_f4",
+        "fact": "Retrieval must be disciplined to avoid stale or irrelevant context.",
+        "keywords": ["retrieval", "stale", "context"]
+      },
+      {
+        "id": "q2_f5",
+        "fact": "Context practices should be verified against task outcomes.",
+        "keywords": ["context", "verified", "outcomes"]
+      }
+    ]
+  },
+  {
+    "question_id": "q3_brittle_tool_use",
+    "review_status": "needs_manual_review",
+    "facts": [
+      {
+        "id": "q3_f1",
+        "fact": "Tool schemas can be brittle when arguments are ambiguous or underspecified.",
+        "keywords": ["tool", "schemas", "ambiguous"]
+      },
+      {
+        "id": "q3_f2",
+        "fact": "Agents should inspect execution feedback before continuing.",
+        "keywords": ["execution", "feedback", "continuing"]
+      },
+      {
+        "id": "q3_f3",
+        "fact": "Retries should distinguish transient errors from invalid tool calls.",
+        "keywords": ["retries", "transient", "invalid"]
+      },
+      {
+        "id": "q3_f4",
+        "fact": "Tests and validation reduce tool-related failures.",
+        "keywords": ["tests", "validation", "failures"]
+      },
+      {
+        "id": "q3_f5",
+        "fact": "Strong claims should cite tool logs, evaluations, or other evidence.",
+        "keywords": ["claims", "tool logs", "evidence"]
+      }
+    ]
+  }
+]

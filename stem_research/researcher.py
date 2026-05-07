@@ -19,6 +19,7 @@ class SpecializedResearcher:
         self,
         question: dict[str, str],
         mode: ResearchMode,
+        source_snippets: list[dict] | None = None,
         protocol: ResearchProtocol | None = None,
     ) -> ResearchOutput:
         if mode not in ("baseline", "specialized"):
@@ -28,11 +29,11 @@ class SpecializedResearcher:
 
         question_id = question["id"]
         question_text = question["question"]
-        source_id = _select_fixture_source(question_text)
+        source_ids = _source_ids(source_snippets, question_text)
 
         if mode == "baseline":
-            return _baseline_answer(question_id, question_text, source_id)
-        return _specialized_answer(question_id, question_text, source_id, protocol)
+            return _baseline_answer(question_id, question_text, source_ids)
+        return _specialized_answer(question_id, question_text, source_ids, protocol)
 
 
 def _select_fixture_source(question: str) -> str:
@@ -44,7 +45,13 @@ def _select_fixture_source(question: str) -> str:
     return "fixture:agent_failure_notes"
 
 
-def _baseline_answer(question_id: str, question: str, source_id: str) -> ResearchOutput:
+def _source_ids(source_snippets: list[dict] | None, question: str) -> list[str]:
+    if source_snippets:
+        return [snippet["id"] for snippet in source_snippets]
+    return [_select_fixture_source(question)]
+
+
+def _baseline_answer(question_id: str, question: str, source_ids: list[str]) -> ResearchOutput:
     claims = [
         "Long-horizon agents often degrade when intermediate assumptions are not checked.",
         "A useful baseline mitigation is to keep outputs structured and run tests frequently.",
@@ -60,8 +67,8 @@ def _baseline_answer(question_id: str, question: str, source_id: str) -> Researc
         question=question,
         answer=answer,
         major_claims=claims,
-        citations=[f"claim_1 -> {source_id}"],
-        sources_used=[source_id],
+        citations=[f"claim_1 -> {source_ids[0]}"],
+        sources_used=source_ids,
         uncertainty_notes=[
             "This is fixture-backed placeholder behavior, not live research.",
             "The answer is intentionally generic for baseline comparison.",
@@ -72,7 +79,7 @@ def _baseline_answer(question_id: str, question: str, source_id: str) -> Researc
 def _specialized_answer(
     question_id: str,
     question: str,
-    source_id: str,
+    source_ids: list[str],
     protocol: ResearchProtocol | None,
 ) -> ResearchOutput:
     if protocol is None:
@@ -99,11 +106,11 @@ def _specialized_answer(
         answer=answer,
         major_claims=claims,
         citations=[
-            f"claim_1 -> {source_id}",
-            f"claim_2 -> {source_id}",
-            f"claim_3 -> {source_id}",
+            f"claim_1 -> {source_ids[0]}",
+            f"claim_2 -> {source_ids[min(1, len(source_ids) - 1)]}",
+            f"claim_3 -> {source_ids[min(2, len(source_ids) - 1)]}",
         ],
-        sources_used=[source_id],
+        sources_used=source_ids,
         uncertainty_notes=[
             "This uses a deterministic protocol and fixture source, not live retrieval.",
             "Claims should be treated as starter hypotheses until manually reviewed.",

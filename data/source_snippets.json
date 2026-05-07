@@ -1,0 +1,76 @@
+[
+  {
+    "id": "src_q1_error_compounding",
+    "title": "Error compounding in long-horizon coding tasks",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q1_long_horizon_coding_agents"],
+    "text": "Long-horizon software engineering tasks require many dependent steps: understanding the request, locating relevant files, planning edits, modifying code, running tests, interpreting failures, and repairing mistakes. A small early misunderstanding can propagate through later steps. Even if each individual action looks locally reasonable, the final patch may drift away from the user's real intent or introduce hidden regressions."
+  },
+  {
+    "id": "src_q1_specification_gap",
+    "title": "Specification and verification gaps in coding agents",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q1_long_horizon_coding_agents"],
+    "text": "Coding agents often receive underspecified tasks. Issue descriptions, user requests, or benchmark prompts may omit hidden constraints, compatibility requirements, production assumptions, or maintainability expectations. Passing visible tests can show that a patch satisfies some local checks, but it does not guarantee semantic correctness, architectural fit, or that the implementation matches the intended product behavior."
+  },
+  {
+    "id": "src_q1_human_escalation",
+    "title": "Need for uncertainty and escalation in autonomous coding",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q1_long_horizon_coding_agents"],
+    "text": "A reliable coding agent needs to recognize when it is uncertain, when the task is ambiguous, and when continued autonomous editing may cause more harm than progress. In long tasks, agents can keep iterating after a wrong assumption instead of stopping to ask for clarification. Human review remains important because reviewers can judge product intent, hidden constraints, risk, and whether a technically passing change is actually acceptable."
+  },
+
+  {
+    "id": "src_q2_context_noise",
+    "title": "Context noise and stale information in LLM agents",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q2_context_management"],
+    "text": "LLM agents accumulate conversation history, tool outputs, intermediate plans, error messages, and partial observations. Over time, the context can contain stale plans, irrelevant details, repeated logs, and outdated assumptions. This noise makes it harder for the model to focus on the few constraints that matter for the next decision."
+  },
+  {
+    "id": "src_q2_context_compression",
+    "title": "Risks of context compression and summarization",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q2_context_management"],
+    "text": "Long-running agents often need to compress or summarize context to stay within token limits. Summaries can remove details that later become important, such as exact user constraints, failed attempts, file paths, or assumptions behind an earlier decision. A summary can preserve the general goal while losing the evidence needed to debug a specific failure."
+  },
+  {
+    "id": "src_q2_retrieval_relevance",
+    "title": "Retrieval and relevance problems in agent context",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q2_context_management"],
+    "text": "Retrieval can help agents access external documents, code, or prior notes, but it also creates new failure modes. Retrieved content may be irrelevant, outdated, duplicated, or only superficially related to the current task. Agents must decide what to keep, what to ignore, and what to re-check. More context is not always better if it increases distraction or reinforces an outdated interpretation."
+  },
+
+  {
+    "id": "src_q3_malformed_tool_calls",
+    "title": "Malformed or misordered tool calls",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q3_tool_use_brittleness"],
+    "text": "Tool-using agents can fail when they produce malformed arguments, call tools in the wrong order, misunderstand a tool schema, or assume that a tool has side effects it does not actually have. Even when the model's high-level plan is reasonable, a small mismatch between the intended action and the tool's required interface can break execution."
+  },
+  {
+    "id": "src_q3_environment_mismatch",
+    "title": "Environment mismatch in tool execution",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q3_tool_use_brittleness"],
+    "text": "A tool call can be syntactically valid but still fail because the runtime environment differs from the agent's assumptions. Common causes include missing dependencies, unavailable files, permission errors, path differences, stale state, network restrictions, or test environments that behave differently from local execution. The agent must interpret these failures rather than assuming the tool result directly reflects the correctness of its plan."
+  },
+  {
+    "id": "src_q3_error_recovery",
+    "title": "Weak recovery from failed tool calls",
+    "source_type": "curated_fixture",
+    "quality": "starter_fixture_needs_review",
+    "related_question_ids": ["q3_tool_use_brittleness"],
+    "text": "After a tool call fails, an agent may repeat the same failing command, misread the error message, patch around a symptom, or switch strategies without diagnosing the root cause. Robust tool use requires not only calling tools, but also checking preconditions, interpreting results, updating the plan, and deciding when to stop and ask for help."
+  }
+]

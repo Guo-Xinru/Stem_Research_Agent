@@ -98,9 +98,13 @@ def _citation_notes(research_output: ResearchOutput, unsupported_claim_count: in
 
 
 def _source_quality_notes(research_output: ResearchOutput) -> list[str]:
-    if all(source.startswith("fixture:") for source in research_output.sources_used):
-        return ["Only fixture/mock sources were used; this is acceptable for the smoke test."]
+    if all(_is_fixture_source_id(source) for source in research_output.sources_used):
+        return ["Only fixture/mock source ids were used; this is acceptable for the smoke test."]
     return ["Non-fixture sources detected; verify source quality manually."]
+
+
+def _is_fixture_source_id(source_id: str) -> bool:
+    return source_id.startswith("fixture:") or source_id.startswith("src_")
 
 
 def _brief_critique(mode: str, recall: float, unsupported_claim_count: int) -> str:

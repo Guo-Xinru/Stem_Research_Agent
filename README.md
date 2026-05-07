@@ -41,7 +41,10 @@ Starter fixtures live in `data/`:
 - `questions.json`
 - `solved_examples.json`
 - `gold_facts.json`
+- `source_snippets.json`
 - `rubric.json`
+
+`source_snippets.json` contains curated fixture snippets. The experiment selects snippets whose `related_question_ids` include the current question id, then passes the same snippets to both baseline and specialized researcher modes.
 
 Gold facts are marked `needs_manual_review` and should not be treated as final benchmark data.
 

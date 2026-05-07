@@ -30,15 +30,19 @@ def main(argv: Sequence[str] | None = None) -> Path:
     solved_examples = load_json(data_dir / "solved_examples.json")
     gold_facts = load_json(data_dir / "gold_facts.json")
     rubric = load_json(data_dir / "rubric.json")
+    source_snippets = load_json(data_dir / "source_snippets.json")
 
     selected_questions = _select_questions(questions, args.limit)
     gold_by_question = _gold_by_question_id(gold_facts)
 
+    # generate the stem protocol
     protocol = Stem().generate_protocol(
         task_class_description=TASK_CLASS_DESCRIPTION,
         solved_examples=solved_examples,
         rubric=rubric,
     )
+
+    # create researcher and evaluator instances
     researcher = SpecializedResearcher()
     evaluator = Evaluator()
 
@@ -46,10 +50,20 @@ def main(argv: Sequence[str] | None = None) -> Path:
     for question in selected_questions:
         question_id = question["id"]
         gold = gold_by_question[question_id]
-
-        baseline_output = researcher.answer(question, mode="baseline")
-        specialized_output = researcher.answer(question, mode="specialized", protocol=protocol)
-
+        selected_snippets = _select_source_snippets(source_snippets, question_id)
+        # baseline and specialized answers
+        baseline_output = researcher.answer(
+            question,
+            mode="baseline",
+            source_snippets=selected_snippets,
+        )
+        specialized_output = researcher.answer(
+            question,
+            mode="specialized",
+            source_snippets=selected_snippets,
+            protocol=protocol,
+        )
+        # evaluations against gold facts
         baseline_evaluation = evaluator.evaluate(question, baseline_output, gold)
         specialized_evaluation = evaluator.evaluate(question, specialized_output, gold)
 
@@ -57,6 +71,7 @@ def main(argv: Sequence[str] | None = None) -> Path:
             {
                 "question": question,
                 "gold_review_status": gold.get("review_status", "unknown"),
+                "source_snippets_used": selected_snippets,
                 "baseline_output": asdict(baseline_output),
                 "specialized_output": asdict(specialized_output),
                 "baseline_evaluation": asdict(baseline_evaluation),
@@ -104,6 +119,17 @@ def _gold_by_question_id(gold_facts: list[dict]) -> dict[str, dict]:
     if len(indexed) != len(gold_facts):
         raise ValueError("gold_facts.json contains duplicate question_id values")
     return indexed
+
+
+def _select_source_snippets(source_snippets: list[dict], question_id: str) -> list[dict]:
+    selected = [
+        snippet
+        for snippet in source_snippets
+        if question_id in snippet.get("related_question_ids", [])
+    ]
+    if not selected:
+        raise ValueError(f"No source snippets found for question id: {question_id}")
+    return selected
 
 
 def _summary_metrics(per_question: list[dict]) -> dict:

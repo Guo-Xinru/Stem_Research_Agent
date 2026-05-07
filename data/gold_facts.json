@@ -1,6 +1,6 @@
 [
   {
-    "question_id": "q1_long_horizon_failures",
+    "question_id": "q1_long_horizon_coding_agents",
     "review_status": "needs_manual_review",
     "facts": [
       {
@@ -62,7 +62,7 @@
     ]
   },
   {
-    "question_id": "q3_brittle_tool_use",
+    "question_id": "q3_tool_use_brittleness",
     "review_status": "needs_manual_review",
     "facts": [
       {

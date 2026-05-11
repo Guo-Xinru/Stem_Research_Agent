@@ -1,6 +1,7 @@
 # StemResearch
 
-StemResearch is a minimal JetBrains AI Engineering Intern test-task prototype. It compares a generic baseline researcher with a stem-specialized researcher that uses an explicit, inspectable research protocol.
+StemResearch is an evaluation-driven LLM research agent.
+It starts from a generic agent and adapts to AI engineering research questions through an explicit generated protocol.
 
 ## Architecture
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from stem_research.llm import DEFAULT_MODEL, request_strict_json
+from stem_research.llm import DEFAULT_OPENAI_MODEL, request_strict_json
 from stem_research.schemas import ResearchProtocol
 
 
@@ -32,6 +32,7 @@ class Stem:
         solved_examples: list[dict[str, Any]],
         rubric: dict[str, Any],
         protocol_mode: str = "fixture",
+        known_failure_modes: list[str] | None = None,
     ) -> ResearchProtocol:
         if not task_class_description:
             raise ValueError("task_class_description is required")
@@ -49,19 +50,26 @@ class Stem:
                     task_class_description=task_class_description,
                     solved_examples=solved_examples,
                     rubric=rubric,
+                    known_failure_modes=known_failure_modes,
                 ),
                 validate=validate_protocol,
             )
             self.last_protocol_metadata = {
                 "generated_by": "openai",
                 "model": metadata["model"],
+                "validated": True,
+                "validation_error": None,
+                "api_error": None,
             }
             return protocol
 
         self.last_protocol_metadata = {
             "generated_by": "fixture",
             "model": None,
-            "default_live_model": DEFAULT_MODEL,
+            "default_live_model": DEFAULT_OPENAI_MODEL,
+            "validated": True,
+            "validation_error": None,
+            "api_error": None,
         }
         return validate_protocol(
             {
@@ -123,7 +131,10 @@ def validate_protocol(protocol: Any) -> ResearchProtocol:
         value = protocol_data[field]
         if not isinstance(value, list):
             raise ValueError(f"protocol field must be a non-empty list: {field}")
-        items = [str(item).strip() for item in value if str(item).strip()]
+        invalid_items = [item for item in value if not isinstance(item, str)]
+        if invalid_items:
+            raise ValueError(f"protocol field must contain only strings: {field}")
+        items = [item.strip() for item in value if item.strip()]
         if not items:
             raise ValueError(f"protocol field must be non-empty: {field}")
         cleaned[field] = items
@@ -143,18 +154,21 @@ def _protocol_user_prompt(
     task_class_description: str,
     solved_examples: list[dict[str, Any]],
     rubric: dict[str, Any],
+    known_failure_modes: list[str] | None = None,
 ) -> str:
     schema = {field: ["non-empty string rule"] for field in REQUIRED_PROTOCOL_FIELDS}
+    known_failure_modes = known_failure_modes or []
     return (
         "Generate a research protocol for the task class below.\n\n"
         f"Task class description:\n{task_class_description}\n\n"
         f"Solved examples JSON:\n{json.dumps(solved_examples, indent=2, sort_keys=True)}\n\n"
         f"Rubric JSON:\n{json.dumps(rubric, indent=2, sort_keys=True)}\n\n"
+        f"Known failure modes JSON:\n{json.dumps(known_failure_modes, indent=2, sort_keys=True)}\n\n"
         "Return strict JSON matching this shape exactly:\n"
         f"{json.dumps(schema, indent=2, sort_keys=True)}\n\n"
         "Rules:\n"
         "- Each required field must be a non-empty list of concrete protocol rules.\n"
-        "- Do not add extra top-level commentary.\n"
+        "- Extra top-level fields will be ignored; the persisted protocol contains only the required fields.\n"
         "- Do not invent experiment results, sources, citations, or web search output.\n"
         "- Preserve the baseline-vs-specialized comparison and no protocol self-revision.\n"
     )

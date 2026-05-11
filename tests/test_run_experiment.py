@@ -14,6 +14,10 @@ def test_run_experiment_smoke(tmp_path) -> None:
     assert "generated_protocol" in result
     assert result["protocol_provenance"]["generated_by"] == "fixture"
     assert result["protocol_provenance"]["validated"] is True
+    assert "validation_error" in result["protocol_provenance"]
+    assert result["protocol_provenance"]["validation_error"] is None
+    assert "api_error" in result["protocol_provenance"]
+    assert result["protocol_provenance"]["api_error"] is None
     assert "summary_metrics" in result
     question_result = result["per_question"][0]
     snippet_ids = [snippet["id"] for snippet in question_result["source_snippets_used"]]

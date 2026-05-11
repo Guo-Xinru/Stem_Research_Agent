@@ -180,7 +180,9 @@ def _protocol_provenance(
         "solved_examples_count": len(solved_examples),
         "rubric_used": bool(rubric),
         "task_class_description_used": TASK_CLASS_DESCRIPTION,
-        "validated": True,
+        "validated": bool(stem_metadata.get("validated", True)),
+        "validation_error": stem_metadata.get("validation_error"),
+        "api_error": stem_metadata.get("api_error"),
     }
 
 

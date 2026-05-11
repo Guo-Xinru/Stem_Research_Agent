@@ -8,7 +8,7 @@ The conceptual architecture has three modules:
 
 - `Stem`: generates one research protocol from the task class, examples, and rubric. The default is deterministic fixture mode; optional live mode uses OpenAI for protocol generation.
 - `SpecializedResearcher`: answers each question in `baseline` or `specialized` mode using fixture behavior.
-- `Evaluator`: checks gold fact coverage and citation support notes. The default is deterministic heuristic mode; optional LLM mode judges semantic coverage of gold facts.
+- `Evaluator`: checks gold fact coverage and citation support notes using deterministic heuristic behavior in the documented experiment.
 
 Small support files handle schemas, prompts, JSON I/O, and the CLI experiment runner.
 
@@ -18,7 +18,7 @@ Small support files handle schemas, prompts, JSON I/O, and the CLI experiment ru
 uv sync
 ```
 
-The current smoke test does not require OpenAI API access.
+The default smoke test does not require OpenAI API access.
 
 ## Run Smoke Test
 
@@ -34,15 +34,18 @@ To generate the protocol with OpenAI instead of the fixture protocol:
 python -m experiments.run_experiment --limit 3 --protocol-mode live
 ```
 
-Live mode requires `OPENAI_API_KEY`. `OPENAI_MODEL` defaults to `gpt-5.5` if it is not set.
+Live mode requires `OPENAI_API_KEY`. If `OPENAI_MODEL` is absent, the code uses the conservative fallback defined in `stem_research/llm.py`.
 
-To use both OpenAI protocol generation and the LLM-assisted evaluator:
+Configure live protocol generation in `.env`:
 
-```bash
-python -m experiments.run_experiment --limit 3 --protocol-mode live --eval-mode llm
+```text
+OPENAI_API_KEY=...
+OPENAI_MODEL=...
 ```
 
-The LLM evaluator classifies each gold fact as `addressed`, `partially_addressed`, or `not_addressed` based on semantic coverage in the answer. It does not produce holistic 1-10 scores, rewrite answers, revise protocols, or feed evaluation results back into `Stem`.
+`OPENAI_MODEL` is optional and overrides the conservative default model defined in `stem_research/llm.py`.
+
+In v0.3, live mode changes only how the Stem protocol is generated. Answer generation still uses the same fixture snippets, and the documented evaluator remains heuristic/offline.
 
 ## Run Tests
 
@@ -64,11 +67,11 @@ Starter fixtures live in `data/`:
 
 Gold facts are marked `needs_manual_review` and should not be treated as final benchmark data.
 
-## Current Limitations
+<!-- ## Current Limitations
 
 - No live web search.
-- OpenAI API calls are only used for `--protocol-mode live` or `--eval-mode llm`.
-- LLM evaluator is optional and requires explicit `--eval-mode llm`.
+- OpenAI API calls are only used for `--protocol-mode live` in the documented v0.3 flow.
+- LLM evaluator support is future work for the main experiment and is not part of v0.3.
 - No protocol self-revision.
 - Fixture sources are clearly labeled and are not real citations.
 
@@ -76,5 +79,5 @@ Gold facts are marked `needs_manual_review` and should not be treated as final b
 
 - Manually review and improve gold facts.
 - Add real retrieval behind a small plain-Python interface.
-- Add optional OpenAI calls while preserving deterministic tests.
-- Expand evaluation with inspectable citation checks.
+- Extend researcher or evaluator live behavior while preserving deterministic tests.
+- Expand evaluation with inspectable citation checks. -->

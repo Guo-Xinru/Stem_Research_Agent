@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import os
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from stem_research.llm import DEFAULT_OPENAI_MODEL, request_strict_json
+from stem_research.prompts import STEM_PROTOCOL_PROMPT
 from stem_research.schemas import ResearchProtocol
 
 
@@ -44,15 +48,19 @@ class Stem:
             raise ValueError("protocol_mode must be either 'fixture' or 'live'")
 
         if protocol_mode == "live":
+            system_prompt = _protocol_system_prompt()
+            user_prompt = _protocol_user_prompt(
+                task_class_description=task_class_description,
+                solved_examples=solved_examples,
+                rubric=rubric,
+                known_failure_modes=known_failure_modes,
+            )
+            _debug_write_stem_prompt(system_prompt=system_prompt, user_prompt=user_prompt)
             protocol, metadata = request_strict_json(
-                system_prompt=_protocol_system_prompt(),
-                user_prompt=_protocol_user_prompt(
-                    task_class_description=task_class_description,
-                    solved_examples=solved_examples,
-                    rubric=rubric,
-                    known_failure_modes=known_failure_modes,
-                ),
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
                 validate=validate_protocol,
+                validation_label="protocol",
             )
             self.last_protocol_metadata = {
                 "generated_by": "openai",
@@ -143,10 +151,7 @@ def validate_protocol(protocol: Any) -> ResearchProtocol:
 
 
 def _protocol_system_prompt() -> str:
-    return (
-        "You generate explicit, inspectable research protocols for a minimal "
-        "StemResearch experiment. Return only JSON. Do not include markdown."
-    )
+    return STEM_PROTOCOL_PROMPT.strip()
 
 
 def _protocol_user_prompt(
@@ -169,6 +174,33 @@ def _protocol_user_prompt(
         "Rules:\n"
         "- Each required field must be a non-empty list of concrete protocol rules.\n"
         "- Extra top-level fields will be ignored; the persisted protocol contains only the required fields.\n"
-        "- Do not invent experiment results, sources, citations, or web search output.\n"
-        "- Preserve the baseline-vs-specialized comparison and no protocol self-revision.\n"
+        "- The protocol is for answering AI engineering research questions using provided source snippets.\n"
+        "- Do not design, compare, measure, or report the StemResearch experiment.\n"
+        "- Do not write about baseline agents, specialized agents, observed differences, comparison plans, measurements, reporting templates, run artifacts, logs, or traces.\n"
+        "- Do not copy evaluator, gold fact, recall, score, or critique terminology from the rubric into the protocol.\n"
+        "- Do not invent sources, citations, web search output, or protocol self-revision steps.\n"
+    )
+
+
+def _debug_write_stem_prompt(*, system_prompt: str, user_prompt: str) -> None:
+    """Persist the exact Stem live prompt only when explicitly requested."""
+    if os.getenv("STEM_DEBUG_PROMPT", "").strip() != "1":
+        return
+    output_dir = Path("runs")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    debug_path = output_dir / f"stem_debug_prompt_{stamp}.json"
+    debug_path.write_text(
+        json.dumps(
+            {
+                "system_prompt": system_prompt,
+                "user_prompt": user_prompt,
+                "contains_api_key": False,
+                "note": "Generated from local task inputs only; no API key or OpenAI response is included.",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
     )

@@ -51,7 +51,7 @@ def main(argv: Sequence[str] | None = None) -> Path:
     )
 
     # create researcher and evaluator instances
-    researcher = SpecializedResearcher()
+    researcher = SpecializedResearcher(researcher_mode=args.researcher_mode)
     evaluator = Evaluator(eval_mode=args.eval_mode)
 
     per_question = []
@@ -104,14 +104,23 @@ def main(argv: Sequence[str] | None = None) -> Path:
             "experiment": "deterministic_smoke_test",
             "limit": len(selected_questions),
             "protocol_mode": args.protocol_mode,
+            "researcher_mode": args.researcher_mode,
             "eval_mode": args.eval_mode,
-            "uses_live_openai_api": args.protocol_mode == "live" or args.eval_mode == "llm",
+            "uses_live_openai_api": (
+                args.protocol_mode == "live"
+                or args.researcher_mode == "live"
+                or args.eval_mode == "llm"
+            ),
             "uses_live_web_search": False,
         },
         generated_protocol=protocol,
         protocol_provenance=protocol_provenance,
+        researcher_provenance=_researcher_provenance(
+            researcher_metadata=researcher.last_metadata,
+            researcher_mode=args.researcher_mode,
+        ),
         per_question=per_question,
-        summary_metrics=_summary_metrics(per_question),
+        summary_metrics=_summary_metrics(per_question, researcher_mode=args.researcher_mode),
     )
 
     output_path = timestamped_run_path(output_dir=args.output_dir)
@@ -129,6 +138,12 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         choices=("fixture", "live"),
         default="fixture",
         help="Use the deterministic fixture protocol or generate it with OpenAI.",
+    )
+    parser.add_argument(
+        "--researcher-mode",
+        choices=("fixture", "live"),
+        default="fixture",
+        help="Use deterministic fixture researcher answers or generate answers with OpenAI.",
     )
     parser.add_argument(
         "--eval-mode",
@@ -186,7 +201,22 @@ def _protocol_provenance(
     }
 
 
-def _summary_metrics(per_question: list[dict]) -> dict:
+def _researcher_provenance(
+    *,
+    researcher_metadata: dict,
+    researcher_mode: str,
+) -> dict:
+    return {
+        "researcher_mode": researcher_mode,
+        "researcher_generated_by": researcher_metadata.get("generated_by", researcher_mode),
+        "researcher_model": researcher_metadata.get("model"),
+        "baseline_live_used": researcher_mode == "live",
+        "specialized_live_used": researcher_mode == "live",
+        "researcher_api_error": researcher_metadata.get("api_error"),
+    }
+
+
+def _summary_metrics(per_question: list[dict], *, researcher_mode: str) -> dict:
     baseline_recalls = [
         item["baseline_evaluation"]["gold_fact_recall"]
         for item in per_question
@@ -208,7 +238,11 @@ def _summary_metrics(per_question: list[dict]) -> dict:
         "average_gold_fact_recall_specialized": round(mean(specialized_recalls), 3),
         "total_unsupported_claims_baseline": sum(baseline_unsupported),
         "total_unsupported_claims_specialized": sum(specialized_unsupported),
-        "comparison_note": "Fixture-only deterministic smoke result; not a final experiment finding.",
+        "comparison_note": (
+            "Live researcher answers over fixture snippets; not a final experiment finding."
+            if researcher_mode == "live"
+            else "Fixture-only deterministic smoke result; not a final experiment finding."
+        ),
     }
 
 

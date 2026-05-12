@@ -67,26 +67,31 @@ def request_strict_json(
     system_prompt: str,
     user_prompt: str,
     validate: Callable[[Any], Any],
+    validation_label: str = "response",
 ) -> tuple[Any, dict[str, str]]:
     """Request JSON from OpenAI and validate it, retrying once on malformed JSON."""
     config = load_openai_config()
     model = config["model"]
     api_key_detected = bool(config["api_key"])
     client = _openai_client(config["api_key"], model=model, api_key_detected=api_key_detected)
-    last_json_error: json.JSONDecodeError | None = None
+    last_response_error: Exception | None = None
 
     for attempt in range(2):
         response_text = _responses_json_response(
             client=client,
             model=model,
             system_prompt=system_prompt,
-            user_prompt=_retry_prompt(user_prompt, last_json_error) if attempt else user_prompt,
+            user_prompt=(
+                _retry_prompt(user_prompt, last_response_error, validation_label)
+                if attempt
+                else user_prompt
+            ),
             api_key_detected=api_key_detected,
         )
         try:
             parsed = json.loads(response_text)
         except json.JSONDecodeError as exc:
-            last_json_error = exc
+            last_response_error = exc
             if attempt == 0:
                 continue
             error = LLMResponseError(f"OpenAI response was not valid JSON: {exc}")
@@ -101,9 +106,12 @@ def request_strict_json(
         try:
             validated = validate(parsed)
         except (ValueError, TypeError) as exc:
-            error = LLMResponseError(f"OpenAI response failed protocol validation: {exc}")
+            last_response_error = exc
+            if attempt == 0:
+                continue
+            error = LLMResponseError(f"OpenAI response failed {validation_label} validation: {exc}")
             _print_openai_diagnostic(
-                step="protocol validation",
+                step=f"{validation_label} validation",
                 model=model,
                 api_key_detected=api_key_detected,
                 exc=error,
@@ -111,7 +119,7 @@ def request_strict_json(
             raise error from exc
         return validated, {"model": model}
 
-    raise LLMResponseError(f"OpenAI response did not produce valid JSON: {last_json_error}")
+    raise LLMResponseError(f"OpenAI response did not produce valid JSON: {last_response_error}")
 
 
 def _openai_client(api_key: str, *, model: str, api_key_detected: bool):
@@ -219,11 +227,11 @@ def _extract_response_text(response: Any) -> str:
     return str(response).strip()
 
 
-def _retry_prompt(user_prompt: str, error: Exception | None) -> str:
+def _retry_prompt(user_prompt: str, error: Exception | None, validation_label: str) -> str:
     return (
         f"{user_prompt}\n\n"
-        "The previous response was not valid protocol JSON for the required schema. "
-        f"Return only corrected JSON. Validation error: {error}"
+        f"The previous response was not valid {validation_label} JSON for the required schema. "
+        f"Return only corrected JSON. Error: {error}"
     )
 
 

@@ -66,5 +66,6 @@ class ExperimentResult:
     metadata: dict
     generated_protocol: ResearchProtocol
     protocol_provenance: dict
+    researcher_provenance: dict
     per_question: list[dict]
     summary_metrics: dict

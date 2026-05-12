@@ -1,46 +1,40 @@
 from dataclasses import asdict
 
-from stem_research.schemas import ResearchProtocol, ResearchOutput
+from stem_research.schemas import EvidenceItem, PaperContext, PaperSection, QasperExample, ResearchOutput
 
 
-def test_research_output_serializes_to_dict() -> None:
+def test_qasper_example_hides_references_for_researcher() -> None:
+    example = QasperExample(
+        id="q1",
+        domain="scientific_paper_qa",
+        question="What did the paper evaluate?",
+        context=PaperContext(
+            paper_title="Paper",
+            abstract="Abstract.",
+            sections=[PaperSection(section_name="Experiments", text="The paper evaluates F1.")],
+        ),
+        reference_answer="It evaluated F1.",
+        evidence=[EvidenceItem(section_name="Experiments", text="The paper evaluates F1.")],
+    )
+
+    safe = example.without_references()
+
+    assert safe.reference_answer is None
+    assert safe.evidence == []
+
+
+def test_research_output_serializes_requested_shape() -> None:
     output = ResearchOutput(
-        question_id="q1",
-        mode="baseline",
-        question="What fails?",
-        answer="A short answer.",
-        major_claims=["Claim one."],
-        citations=["claim_1 -> fixture:agent_failure_notes"],
-        sources_used=["fixture:agent_failure_notes"],
-        uncertainty_notes=["Fixture behavior."],
+        id="q1",
+        mode="baseline_with_tool",
+        question="Question?",
+        answer="Answer.",
+        selected_evidence=[EvidenceItem(section_name="Intro", text="Answer evidence.", score=1.0)],
+        used_protocol=False,
     )
 
     serialized = asdict(output)
 
-    assert serialized["question_id"] == "q1"
-    assert serialized["mode"] == "baseline"
-    assert serialized["sources_used"] == ["fixture:agent_failure_notes"]
-
-
-def test_protocol_contains_required_sections() -> None:
-    protocol = ResearchProtocol(
-        search_strategy=["search"],
-        source_selection_criteria=["sources"],
-        answer_structure=["structure"],
-        verification_rules=["verify"],
-        citation_requirements=["cite"],
-        stopping_criteria=["stop"],
-        failure_modes_to_avoid=["avoid"],
-    )
-
-    serialized = asdict(protocol)
-
-    assert set(serialized) == {
-        "search_strategy",
-        "source_selection_criteria",
-        "answer_structure",
-        "verification_rules",
-        "citation_requirements",
-        "stopping_criteria",
-        "failure_modes_to_avoid",
-    }
+    assert serialized["id"] == "q1"
+    assert serialized["mode"] == "baseline_with_tool"
+    assert serialized["selected_evidence"][0]["section_name"] == "Intro"

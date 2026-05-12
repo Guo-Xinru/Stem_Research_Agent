@@ -35,6 +35,36 @@ def write_json(path: str | Path, data: Any) -> Path:
     return json_path
 
 
+def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
+    jsonl_path = Path(path)
+    if not jsonl_path.exists():
+        raise FileNotFoundError(f"Required JSONL file not found: {jsonl_path}")
+    records: list[dict[str, Any]] = []
+    with jsonl_path.open("r", encoding="utf-8") as file:
+        for line_number, raw_line in enumerate(file, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Malformed JSONL in {jsonl_path}:{line_number}: {exc}") from exc
+            if not isinstance(record, dict):
+                raise ValueError(f"JSONL record must be an object in {jsonl_path}:{line_number}")
+            records.append(record)
+    return records
+
+
+def write_jsonl(path: str | Path, records: list[Any]) -> Path:
+    jsonl_path = Path(path)
+    ensure_dir(jsonl_path.parent)
+    with jsonl_path.open("w", encoding="utf-8") as file:
+        for record in records:
+            json.dump(_to_jsonable(record), file, sort_keys=True)
+            file.write("\n")
+    return jsonl_path
+
+
 def timestamped_run_path(
     prefix: str = "run",
     suffix: str = ".json",

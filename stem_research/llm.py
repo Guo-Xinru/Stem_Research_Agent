@@ -26,6 +26,7 @@ def load_openai_config() -> dict[str, str]:
     _load_env_file()
     api_key = os.getenv("OPENAI_API_KEY", "").strip()
     model = os.getenv("OPENAI_MODEL", DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
+    base_url = os.getenv("OPENAI_BASE_URL", "").strip()
     if not api_key:
         error = LLMConfigurationError("OPENAI_API_KEY is required for live OpenAI modes.")
         _print_openai_diagnostic(
@@ -35,7 +36,7 @@ def load_openai_config() -> dict[str, str]:
             exc=error,
         )
         raise error
-    return {"api_key": api_key, "model": model}
+    return {"api_key": api_key, "model": model, "base_url": base_url}
 
 
 def _load_env_file() -> None:
@@ -73,7 +74,12 @@ def request_strict_json(
     config = load_openai_config()
     model = config["model"]
     api_key_detected = bool(config["api_key"])
-    client = _openai_client(config["api_key"], model=model, api_key_detected=api_key_detected)
+    client = _openai_client(
+        config["api_key"],
+        base_url=config.get("base_url") or None,
+        model=model,
+        api_key_detected=api_key_detected,
+    )
     last_response_error: Exception | None = None
 
     for attempt in range(2):
@@ -122,12 +128,18 @@ def request_strict_json(
     raise LLMResponseError(f"OpenAI response did not produce valid JSON: {last_response_error}")
 
 
-def _openai_client(api_key: str, *, model: str, api_key_detected: bool):
+def _openai_client(
+    api_key: str,
+    *,
+    base_url: str | None,
+    model: str,
+    api_key_detected: bool,
+):
     try:
         from openai import OpenAI
     except ImportError as exc:
         error = LLMConfigurationError(
-            "The openai package is required when --protocol-mode live is used."
+            "The openai package is required when LLM mode is used."
         )
         _print_openai_diagnostic(
             step="OpenAI import",
@@ -137,7 +149,10 @@ def _openai_client(api_key: str, *, model: str, api_key_detected: bool):
         )
         raise error from exc
     try:
-        return OpenAI(api_key=api_key)
+        kwargs: dict[str, Any] = {"api_key": api_key, "timeout": 60.0}
+        if base_url:
+            kwargs["base_url"] = base_url
+        return OpenAI(**kwargs)
     except Exception as exc:
         _print_openai_diagnostic(
             step="OpenAI client creation",

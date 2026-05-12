@@ -1,112 +1,57 @@
-import pytest
-
-from stem_research.evaluator import Evaluator, validate_llm_evaluation_response
-from stem_research.schemas import ResearchOutput
+from stem_research.evaluator import Evaluator, answer_token_f1, evidence_scores, unsupported_claim_count
+from stem_research.schemas import EvidenceItem, PaperContext, PaperSection, QasperExample, ResearchOutput
 
 
-def test_evaluator_computes_weighted_gold_fact_recall() -> None:
-    question = {"id": "q1", "question": "Why do agents fail?"}
+def test_answer_token_f1_exact_partial_and_empty() -> None:
+    assert answer_token_f1("A retrieval method.", "A retrieval method.") == 1.0
+    assert 0 < answer_token_f1("retrieval method", "retrieval reranking method") < 1
+    assert answer_token_f1("", "reference") == 0.0
+    assert answer_token_f1("", "") == 1.0
+
+
+def test_evidence_recall_and_precision_simple_examples() -> None:
+    gold = [EvidenceItem(section_name="Method", text="The method reranks evidence passages.")]
+    selected = [EvidenceItem(section_name="Method", text="The method reranks evidence passages well.")]
+
+    recall, precision = evidence_scores(selected, gold)
+
+    assert recall == 1.0
+    assert precision == 1.0
+
+
+def test_unsupported_claim_count_handles_empty_answer() -> None:
+    assert unsupported_claim_count("", []) == 0
+
+
+def test_evaluator_scores_qasper_output() -> None:
+    example = _example()
     output = ResearchOutput(
-        question_id="q1",
-        mode="specialized",
-        question=question["question"],
-        answer="Planning drift appears over many steps. Verification is mentioned.",
-        major_claims=["Planning drift matters.", "Verification helps."],
-        citations=["claim_1 -> fixture:agent_failure_notes"],
-        sources_used=["fixture:agent_failure_notes"],
-        uncertainty_notes=["Fixture behavior."],
+        id="q1",
+        mode="specialized_with_protocol_and_tool",
+        question=example.question,
+        answer="The method reranks evidence passages.",
+        selected_evidence=example.evidence,
+        used_protocol=True,
     )
-    gold_facts = {
-        "question_id": "q1",
-        "facts": [
-            {
-                "id": "f1",
-                "fact": "Planning drift appears over many steps.",
-                "keywords": ["planning drift", "steps"],
-            },
-            {
-                "id": "f2",
-                "fact": "Verification should include tests.",
-                "keywords": ["verification", "tests"],
-            },
-            {
-                "id": "f3",
-                "fact": "Tool feedback can compound.",
-                "keywords": ["tool", "feedback"],
-            },
-        ],
-    }
 
-    result = Evaluator().evaluate(question, output, gold_facts)
+    result = Evaluator().evaluate_qasper(example, output)
 
-    assert result.evaluation_mode == "heuristic"
-    assert result.gold_fact_recall == 0.5
-    assert [item.label for item in result.gold_fact_evaluations] == [
-        "addressed",
-        "partially_addressed",
-        "not_addressed",
-    ]
-    assert result.unsupported_claim_count == 1
+    assert result.answer_token_f1 == 1.0
+    assert result.evidence_recall == 1.0
+    assert result.evidence_precision == 1.0
+    assert result.protocol_adherence is not None
 
 
-def test_llm_evaluator_response_validation_accepts_complete_output() -> None:
-    validated = validate_llm_evaluation_response(_valid_llm_response(), _gold_facts())
-
-    assert validated["gold_fact_evaluations"][0]["label"] == "addressed"
-
-
-def test_llm_evaluator_response_validation_rejects_invalid_label() -> None:
-    response = _valid_llm_response()
-    response["gold_fact_evaluations"][0]["label"] = "mostly_addressed"
-
-    with pytest.raises(ValueError, match="Invalid LLM evaluator label"):
-        validate_llm_evaluation_response(response, _gold_facts())
-
-
-def test_llm_evaluator_response_validation_rejects_missing_fact_id() -> None:
-    response = _valid_llm_response()
-    response["gold_fact_evaluations"] = response["gold_fact_evaluations"][:1]
-
-    with pytest.raises(ValueError, match="missing fact ids"):
-        validate_llm_evaluation_response(response, _gold_facts())
-
-
-def test_llm_evaluator_response_validation_rejects_duplicate_fact_id() -> None:
-    response = _valid_llm_response()
-    response["gold_fact_evaluations"][1]["fact_id"] = "f1"
-
-    with pytest.raises(ValueError, match="duplicate fact ids"):
-        validate_llm_evaluation_response(response, _gold_facts())
-
-
-def _gold_facts() -> dict:
-    return {
-        "question_id": "q1",
-        "facts": [
-            {"id": "f1", "fact": "Fact one.", "keywords": ["one"]},
-            {"id": "f2", "fact": "Fact two.", "keywords": ["two"]},
-        ],
-    }
-
-
-def _valid_llm_response() -> dict:
-    return {
-        "gold_fact_evaluations": [
-            {
-                "fact_id": "f1",
-                "label": "addressed",
-                "rationale": "The answer states fact one.",
-                "evidence_from_answer": "fact one",
-            },
-            {
-                "fact_id": "f2",
-                "label": "not_addressed",
-                "rationale": "The answer does not state fact two.",
-                "evidence_from_answer": "",
-            },
-        ],
-        "unsupported_claim_count": 0,
-        "citation_support_notes": "Claims are cited.",
-        "source_quality_notes": "Fixture sources only.",
-        "brief_critique": "Semantic coverage is mixed.",
-    }
+def _example() -> QasperExample:
+    return QasperExample(
+        id="q1",
+        domain="scientific_paper_qa",
+        question="What method is used?",
+        context=PaperContext(
+            paper_title="Paper",
+            abstract="Abstract.",
+            sections=[PaperSection(section_name="Method", text="The method reranks evidence passages.")],
+        ),
+        reference_answer="The method reranks evidence passages.",
+        evidence=[EvidenceItem(section_name="Method", text="The method reranks evidence passages.")],
+    )

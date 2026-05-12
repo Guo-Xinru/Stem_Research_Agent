@@ -10,3 +10,60 @@ __pycache__/
 .DS_Store
 CLAUDE.md
 AGENTS.md
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv
+.uv-cache/
+
+# Environment variables / secrets
+.env
+.env.*
+!.env.example
+
+# Local data/cache
+.cache/
+.huggingface/
+hf_cache/
+datasets_cache/
+
+# Generated experiment outputs
+outputs/
+runs/
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Large/raw datasets
+data/raw/
+data/downloads/
+data/cache/
+
+# Keep curated small fixtures trackable
+!data/qasper_mini/
+!data/qasper_mini/train.jsonl
+!data/qasper_mini/eval.jsonl
+!data/ai_engineering/
+!data/ai_engineering/*.jsonl

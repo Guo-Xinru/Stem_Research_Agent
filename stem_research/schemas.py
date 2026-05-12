@@ -3,69 +3,110 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 
-ResearchMode = Literal["baseline", "specialized"]
-GoldFactLabel = Literal["addressed", "partially_addressed", "not_addressed"]
+ResearchMode = Literal[
+    "baseline_no_tool",
+    "baseline_with_tool",
+    "specialized_with_protocol_and_tool",
+]
+RunMode = Literal["offline", "llm"]
 
 
 @dataclass(frozen=True)
-class Question:
+class PaperSection:
+    section_name: str
+    text: str
+
+
+@dataclass(frozen=True)
+class PaperContext:
+    paper_title: str
+    abstract: str
+    sections: list[PaperSection]
+
+
+@dataclass(frozen=True)
+class EvidenceItem:
+    section_name: str
+    text: str
+    score: float = 0.0
+    evidence_id: str | None = None
+
+
+@dataclass(frozen=True)
+class QasperExample:
     id: str
+    domain: str
     question: str
+    context: PaperContext
+    reference_answer: str | None = None
+    evidence: list[EvidenceItem] = field(default_factory=list)
+    answer_type: str = "abstractive"
+
+    def without_references(self) -> "QasperExample":
+        """Return the example as it is allowed to be seen by the researcher."""
+        return QasperExample(
+            id=self.id,
+            domain=self.domain,
+            question=self.question,
+            context=self.context,
+            reference_answer=None,
+            evidence=[],
+            answer_type=self.answer_type,
+        )
 
 
 @dataclass(frozen=True)
 class ResearchProtocol:
-    search_strategy: list[str]
-    source_selection_criteria: list[str]
-    answer_structure: list[str]
+    task_class: str
+    observed_question_types: list[str]
+    evidence_strategy: list[str]
+    answer_rules: list[str]
+    tool_policy: dict[str, Any]
     verification_rules: list[str]
-    citation_requirements: list[str]
-    stopping_criteria: list[str]
-    failure_modes_to_avoid: list[str]
+    failure_modes: list[str]
 
 
 @dataclass(frozen=True)
 class ResearchOutput:
-    question_id: str
+    id: str
     mode: ResearchMode
     question: str
     answer: str
-    major_claims: list[str]
-    citations: list[str]
-    sources_used: list[str]
-    uncertainty_notes: list[str]
+    selected_evidence: list[EvidenceItem]
+    used_protocol: bool
 
 
 @dataclass(frozen=True)
-class GoldFactEvaluation:
-    fact_id: str
-    fact: str
-    label: GoldFactLabel
-    matched_keywords: list[str] = field(default_factory=list)
-    notes: str = ""
+class ProtocolAdherence:
+    used_required_tool: bool
+    selected_evidence_present: bool
+    answer_grounded_in_evidence: bool
+    avoided_known_failure_modes: bool
+    score: float
 
 
 @dataclass(frozen=True)
 class EvaluationResult:
-    question_id: str
+    id: str
     mode: ResearchMode
-    evaluation_mode: Literal["heuristic", "llm"]
-    gold_fact_evaluations: list[GoldFactEvaluation]
-    gold_fact_recall: float
+    answer_token_f1: float
+    evidence_recall: float
+    evidence_precision: float
     unsupported_claim_count: int
-    citation_support_notes: list[str]
-    source_quality_notes: list[str]
-    brief_critique: str
+    protocol_adherence: ProtocolAdherence | None
+    answer_length_words: int
 
 
 @dataclass(frozen=True)
-class ExperimentResult:
-    metadata: dict
-    generated_protocol: ResearchProtocol
-    protocol_provenance: dict
-    researcher_provenance: dict
-    per_question: list[dict]
-    summary_metrics: dict
+class AggregateMetrics:
+    mode: ResearchMode
+    num_examples: int
+    avg_answer_token_f1: float
+    avg_evidence_recall: float
+    avg_evidence_precision: float
+    avg_unsupported_claim_count: float
+    avg_protocol_adherence: float | None
+    avg_answer_length_words: float

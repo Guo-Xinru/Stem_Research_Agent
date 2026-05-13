@@ -52,6 +52,7 @@ def _parser() -> argparse.ArgumentParser:
     prepare.add_argument("--train-size", type=int, default=30)
     prepare.add_argument("--eval-size", type=int, default=50)
     prepare.add_argument("--seed", type=int, default=13)
+    prepare.add_argument("--debug-schema", action="store_true")
 
     run = subparsers.add_parser("run-qasper")
     run.add_argument("--data", type=Path, default=Path("data/qasper_mini"))
@@ -190,6 +191,7 @@ def _prepare_qasper_mini(args: argparse.Namespace) -> int:
         train_size=args.train_size,
         eval_size=args.eval_size,
         seed=args.seed,
+        debug_schema=args.debug_schema,
     )
     return 0
 

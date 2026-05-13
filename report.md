@@ -1,150 +1,157 @@
-# StemResearch: Protocol-Level Specialization for AI Engineering Research Agents
+# StemResearch: Protocol-Level Specialization for Research Agents
 
 ## 1. Problem Interpretation and Design Goal
 
-I interpret a "stem agent" as an agent that starts with a generic capability and then specializes for a task class by learning an explicit task protocol. In this project, specialization does not mean unrestricted self-modifying code, dynamic tool acquisition, or a long-running autonomous system. It means generating an inspectable `ResearchProtocol` that changes how a researcher answers a class of questions.
+I interpret a “stem agent” as an agent that starts with generic behavior and specializes for a task class by producing an explicit task protocol. In this project, specialization does not mean self-modifying code, dynamic tool acquisition, or a fully autonomous long-running system. It means generating an inspectable `ResearchProtocol` that changes how a researcher selects evidence and answers questions.
 
-I chose AI engineering research questions as the task class because they expose common failure modes in agent systems: long-horizon coding reliability, context management, tool-use brittleness, evaluation, and autonomy limits. These questions are narrow enough for a small prototype, but still require source grounding, mechanism extraction, citation discipline, and explicit uncertainty.
+The project originally focused on AI engineering research questions. During implementation, I moved the main experiment to QASPER-mini, a paper-grounded QA setting, because it gives a more reproducible way to measure evidence use with hidden reference answers and evidence annotations. The AI-engineering version remains as a domain demo, while QASPER-mini is used for the controlled experiment.
 
 The design goal is a minimal, runnable loop:
 
-task class + solved examples + rubric -> Stem-generated protocol -> baseline vs specialized researcher -> evaluator comparison
+```text
+solved examples + rubric -> Stem-generated protocol -> baseline vs specialized researcher -> evaluator comparison
+```
 
-The experiment asks whether giving the researcher a generated protocol improves answer quality compared with a generic baseline prompt.
-
-The repository therefore prioritizes runnable code, visible intermediate artifacts, and measurable before/after comparison over complex autonomy.
+The main question is not whether the agent becomes fully autonomous, but whether a generated protocol can produce measurable behavioral differences compared with a generic tool-using baseline.
 
 ## 2. Approach
 
 ### 2.1 Protocol-Level Specialization
 
-The Stem receives a task class description, a small set of solved examples, and a scoring rubric. From these inputs it generates a structured `ResearchProtocol` with seven fields:
+The core method is protocol-level specialization. `Stem` reads solved examples and generates a structured `ResearchProtocol`. The protocol includes both descriptive research rules and executable fields:
 
-- `search_strategy`
-- `source_selection_criteria`
-- `answer_structure`
-- `verification_rules`
-- `citation_requirements`
-- `stopping_criteria`
-- `failure_modes_to_avoid`
+- evidence selection policy
+- answer policy
+- source-grounding requirements
+- failure modes to avoid
+- stopping and verification rules
 
-The specialized researcher then receives the same question and source snippets as the baseline researcher, plus this generated protocol. The comparison isolates the effect of protocol guidance as much as this small prototype allows.
+The most important change in the current experiment is that the protocol is not only shown to the researcher as text. It directly controls evidence selection in the specialized mode.
+
+The three compared modes are:
+
+1. `baseline_no_tool`: answers without retrieval.
+2. `baseline_with_tool`: uses the local evidence retriever and answers from raw top-k evidence.
+3. `specialized_with_protocol_and_tool`: uses the same retriever, but applies protocol-guided evidence filtering before answering.
+
+This keeps the tool constant while testing whether the protocol adds behavior beyond retrieval.
 
 ### 2.2 Architecture
 
-The project has three conceptual components.
+The project has three components.
 
-`Stem` generates the protocol. In fixture mode it returns a deterministic protocol. In live mode it calls OpenAI to generate the protocol, validates the result, and records provenance such as model, validation status, and API error status.
+`Stem` generates the protocol from solved examples. In offline mode, it produces a deterministic protocol so the system can run without live API access.
 
-`SpecializedResearcher` answers questions in two modes. Baseline mode uses generic research instructions. Specialized mode receives the generated protocol in addition to the same question and fixture source snippets. Gold facts are hidden from both modes.
+`SpecializedResearcher` answers questions. In baseline-with-tool mode, it retrieves the raw top 3 evidence snippets. In specialized mode, it retrieves a larger candidate set, then uses the protocol to rerank and filter evidence before answering.
 
-In live researcher mode, both baseline and specialized researchers use the same model, same question, same source snippets, and same output schema; the intended difference is the presence or absence of the generated protocol.
+`Evaluator` scores outputs against hidden reference answers and evidence. The researcher never sees gold answers or gold evidence.
 
-`Evaluator` scores answers against manually curated gold facts. It reports gold-fact recall, citation support notes, unsupported claim counts, and source quality notes. It does not use holistic 1-10 scoring.
+The implementation intentionally avoids LangChain, vector databases, multi-agent orchestration, persistent memory, web search, and evaluator-driven protocol revision. The point is to keep the experiment inspectable and reproducible.
 
-The implementation intentionally avoids LangChain, vector databases, multi-agent orchestration, persistent memory, web search, and evaluator-driven protocol revision. The point is to keep the loop inspectable rather than framework-heavy.
+### 2.3 Evidence Retrieval and Protocol Execution
 
-### 2.3 How the Stem Infers the Task Approach
+The retriever is a simple deterministic keyword/overlap retriever, not a vector database. This is deliberate: the goal is not to maximize retrieval quality, but to make the experiment easy to inspect.
 
-The Stem infers the task approach from the task class description, solved examples, and rubric. The interface also supports optional known failure modes, although the current live run did not pass additional failure-mode inputs. The solved examples show repeated answer patterns, such as checking evidence, preserving exact constraints, marking uncertainty, and grounding claims in source IDs. The rubric provides task-level quality criteria, while gold facts and evaluator outputs remain hidden from Stem.
+The baseline-with-tool mode uses raw retriever output directly.
 
-The Stem does not learn by seeing evaluation scores. It converts visible task-level inputs into a reusable protocol for future questions. In v0.4.1, the live generated protocol focused on reading all provided snippets, extracting mechanisms, grounding claims in source IDs, synthesizing across snippets, avoiding unsupported generalizations, and stopping only after major claims have support.
+The specialized mode uses protocol fields such as:
 
-### 2.4 How the Agent Decides What to Become
+```text
+top_k_raw = 8
+top_k_final = 3
+min_question_token_overlap = 2
+preferred sections = abstract, methods, experiments, results, conclusion
+discard_generic_snippets = true
+```
 
-This prototype does not let the agent choose arbitrary architectures, tools, or skills. It specializes within a constrained design space: it becomes a protocol-guided AI engineering research agent.
+It retrieves more candidate evidence, applies deterministic reranking/filtering, and then answers from the selected evidence. This gives the protocol a real behavioral role.
 
-The "skills" it obtains are represented as protocol rules rather than new code. Examples include source grounding, claim-level citation discipline, mechanism extraction, cross-source synthesis, unsupported-claim checks, and stopping rules. This is deliberately modest, but it makes the specialization easy to inspect and evaluate.
-
-### 2.5 How It Rebuilds Without Breaking
-
-The agent does not rewrite executable code. It "rebuilds" itself by replacing an inspectable protocol object. This keeps the system safer and easier to debug: fixture mode remains the default offline path, live mode is optional, and the run output records protocol provenance.
-
-The project also records whether validation passed and whether API or validation errors occurred. After an earlier live protocol generated the wrong kind of protocol, I added a safe debug hook to save the exact Stem prompt locally when explicitly enabled. That made it possible to diagnose prompt contamination without exposing secrets.
-
-### 2.6 When It Stops Evolving and Starts Executing
-
-The first stopping gate is structural validation. `validate_protocol` requires all seven protocol fields, each as a non-empty list of strings. If live generation fails, the code fails loudly rather than silently falling back to fixture mode.
-
-This was not enough by itself. An earlier protocol was structurally valid but semantically wrong: it described how to compare baseline and specialized agents rather than how to answer research questions. In v0.4.1, the prompt was fixed so the protocol is explicitly for answering AI engineering research questions using provided source snippets. The current implementation still relies on prompt constraints and inspection for semantic task alignment; automatic semantic protocol validation is future work.
-
-Once the protocol is validated, it is frozen for the run. The evaluator does not revise it, and gold-fact scores are not fed back into Stem in the main experiment.
-
-## 3. Experiments
+## 3. Experiment
 
 ### 3.1 Setup
 
-The default smoke test remains offline, but the reported v0.4.1 comparison uses live protocol and live researcher modes. The live experiment used three starter questions:
+The main experiment uses QASPER-mini:
 
-- `q1_long_horizon_coding_agents`
-- `q2_context_management`
-- `q3_tool_use_brittleness`
-
-Both baseline and specialized modes received the same curated fixture snippets for each question. Gold facts were hidden from Stem and both researchers. Live mode used OpenAI for protocol generation and researcher answer generation. The evaluator remained offline and heuristic.
+- 30 training / solved examples
+- 50 evaluation questions
+- offline deterministic run mode
+- local evidence retriever
+- hidden reference answers and evidence
 
 The command was:
 
-```text
-.\.venv\Scripts\python.exe -m experiments.run_experiment --limit 3 --protocol-mode live --researcher-mode live
+```bash
+uv run python -m stemresearch.cli run-qasper \
+  --data data/qasper_mini \
+  --run-mode offline \
+  --output-dir outputs/qasper_protocol_selection_full
 ```
 
-The cleaned evidence files are under `results/`, especially `v0.4.1_live_protocol_summary.md` and `v0.4.1_comparison_3q_summary.md`.
+The evaluator reports:
 
-### 3.2 Metrics
+- `answer_token_f1`
+- `evidence_recall`
+- `evidence_precision`
+- `unsupported_claim_count`
+- `protocol_adherence`
+- `answer_length_words`
 
-The main metric is `gold_fact_recall`, computed from explicit gold-fact labels. The run also reports `citation_support_notes` and `unsupported_claim_count`. There is no vague holistic score.
+The metrics are heuristic and deterministic. They are useful for comparison, but they do not fully capture semantic equivalence.
 
-The current evaluator is exact/keyword-based, so it can undercount semantic paraphrases. This is useful for deterministic smoke testing, but it is not a final human-quality evaluation.
+### 3.2 Results
 
-### 3.3 Results
+| mode                               | answer_token_f1 | evidence_recall | evidence_precision | unsupported_claim_count | protocol_adherence | answer_length_words |
+| ---------------------------------- | --------------: | --------------: | -----------------: | ----------------------: | -----------------: | ------------------: |
+| baseline_no_tool                   |          0.0595 |          0.0000 |             0.0000 |                  2.0000 |                n/a |               44.86 |
+| baseline_with_tool                 |          0.0817 |          0.3212 |             0.1767 |                  0.0400 |                n/a |               41.20 |
+| specialized_with_protocol_and_tool |          0.0777 |          0.2962 |             0.1900 |                  0.0400 |             0.9700 |               39.38 |
 
-| question_id                   | baseline_gold_fact_recall | specialized_gold_fact_recall | delta_gold_fact_recall | baseline_unsupported_claim_count | specialized_unsupported_claim_count |
-| ----------------------------- | ------------------------: | ---------------------------: | ---------------------: | -------------------------------: | ----------------------------------: |
-| q1_long_horizon_coding_agents |                     0.167 |                        0.167 |                    0.0 |                                0 |                                   0 |
-| q2_context_management         |                     0.083 |                        0.167 |                  0.084 |                                0 |                                   0 |
-| q3_tool_use_brittleness       |                     0.167 |                          0.0 |                 -0.167 |                                0 |                                   0 |
+The largest improvement comes from adding the retrieval tool. Compared with `baseline_no_tool`, `baseline_with_tool` improves answer F1, evidence recall, evidence precision, and unsupported-claim count.
 
-Average baseline gold-fact recall: `0.139`
+The specialized mode now behaves differently from the tool baseline. It improves evidence precision from `0.1767` to `0.1900`, but evidence recall drops from `0.3212` to `0.2962`, and answer F1 drops slightly from `0.0817` to `0.0777`.
 
-Average specialized gold-fact recall: `0.111`
+This means the protocol acted as a conservative evidence filter. It made evidence selection more selective, but did not improve overall answer quality in this run.
 
-Average delta: `-0.028`
+## 4. Interpretation
 
-Unsupported claim totals:
+The experiment supports three conclusions.
 
-- Baseline: `0`
-- Specialized: `0`
+First, retrieval is essential. Without tools, the researcher has no evidence recall and produces more unsupported claims.
 
-This does not show an average improvement from specialization on the 3-question starter set. The specialized researcher improved on the context-management question, tied on the long-horizon coding-agent question, and underperformed on the tool-use brittleness question under the heuristic evaluator.
+Second, protocol specialization is now real and measurable. The specialized mode no longer behaves identically to the tool baseline; it uses protocol fields to change evidence selection and answer length.
 
-### 3.4 Qualitative Interpretation
+Third, specialization is not automatically beneficial. The protocol improved evidence precision but reduced recall and slightly lowered lexical answer F1. This is a useful negative result: an inspectable protocol can change behavior, but better specialization requires better protocol design, retrieval quality, and evaluation.
 
-The end-to-end live pipeline works: OpenAI generates the Stem protocol, OpenAI generates baseline and specialized answers, and the offline evaluator scores both modes on the same questions. The v0.4.1 protocol is now research-answering focused after removing prompt contamination. I treat this as a pipeline success, but not as evidence that specialization improved answer quality.
+## 5. What Worked and What Failed
 
-The mixed result is still important. It suggests protocol-level specialization is feasible and inspectable, but not automatically beneficial. Likely reasons include the strength of the generic baseline, the very small three-question set, the exact keyword evaluator, and the fact that a protocol may improve discipline and citation structure more than keyword recall. It also shows that protocol-answer alignment remains hard: a good-looking protocol must still shape the actual answer in ways the evaluator can measure.
+What worked:
 
-## 4. What Surprised Me
+- The full offline pipeline is runnable.
+- The protocol is explicit and inspectable.
+- The specialized researcher uses the protocol in executable evidence selection.
+- The evaluator can detect differences between no-tool, tool, and protocol-guided modes.
+- The system remains small and reproducible.
 
-The hardest part was not API integration. The harder problem was keeping task levels separated. The Stem should learn how to answer AI engineering research questions, not how to write up the outer experiment comparing baseline and specialized agents.
+What failed or remains weak:
 
-One earlier live protocol passed schema validation but was semantically wrong. It generated an experiment-comparison protocol because the live Stem prompt accidentally contained baseline-vs-specialized framing. This made it clear that schema validation alone is not enough; generated protocols also need task-alignment checks.
+- The specialized mode did not improve answer F1.
+- The retriever has low evidence precision overall.
+- The evaluator is heuristic and may miss semantic equivalence.
+- QASPER-mini is only a small controlled benchmark.
+- There is no web search, vector retrieval, semantic judge, or automatic protocol revision.
 
-I was also surprised by how difficult fair measurement is. The specialized protocol can make the answer more disciplined, but that does not guarantee higher keyword recall on a tiny fixture set.
-
-## 5. What Failed or Remained Weak
-
-The specialized researcher did not improve average recall in v0.4.1. The evaluation set has only three starter questions, and the heuristic evaluator can miss paraphrases or semantically correct coverage that does not match expected keywords. The gold set is small and should be treated as a starter evaluation set.
-
-The source snippets are curated fixtures, not live research. There is no web search, no LLM evaluator, no automatic protocol revision, and no statistical generalization. Protocol validation is mostly structural, although the prompt debug hook and manual inspection helped catch the earlier semantic alignment problem.
+These limitations are intentional to some extent. The project prioritizes a minimal measurable prototype over a complex agent framework.
 
 ## 6. Future Work
 
-The next step is to expand the gold set to 6-10 manually reviewed questions. I would also add an optional LLM evaluator for semantic gold-fact coverage, with human spot checks rather than trusting it blindly.
+The next step would be to improve evidence retrieval while keeping the same comparison structure. Better section-aware retrieval or a simple BM25-style scorer could reduce noise without adding a vector database.
 
-Other useful extensions would be controlled retrieval or web search behind a small plain-Python interface, comparison across multiple generated protocols, semantic protocol validation, and protocol revision as a clearly separate experiment. I would keep revision outside the main comparison so the specialized agent does not train on evaluator feedback from the evaluation set.
+I would also add a semantic evaluator as a secondary metric, with human spot checks, because token F1 is too strict for scientific QA. Protocol revision could be tested later, but only as a separate experiment so that evaluator feedback does not leak into the main comparison.
+
+Finally, I would run multiple generated protocols and compare their behavior, because this experiment shows that the content of the protocol matters as much as the existence of a protocol.
 
 ## 7. Conclusion
 
-StemResearch demonstrates a minimal, inspectable version of agent specialization. A generic researcher can be specialized through an explicit generated protocol rather than through hidden orchestration or self-modifying code.
+StemResearch demonstrates a minimal, inspectable version of agent specialization. A generic researcher can be specialized through a generated protocol that changes evidence-selection behavior.
 
-The current result is mixed, not a success claim. The specialized researcher did not improve average heuristic recall on the 3-question starter set. The main value of the prototype is the measurable, debuggable pipeline and the finding that protocol specialization requires careful task alignment, not just a valid JSON schema.
+The result is mixed, not a broad success claim. The protocol-guided researcher improved evidence precision but reduced evidence recall and slightly lowered answer F1. The main value of the prototype is that it makes specialization explicit, executable, and measurable, while also showing that protocol-level specialization is not automatically better than a strong tool-using baseline.

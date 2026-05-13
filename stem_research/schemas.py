@@ -67,6 +67,8 @@ class ResearchProtocol:
     tool_policy: dict[str, Any]
     verification_rules: list[str]
     failure_modes: list[str]
+    evidence_selection: dict[str, Any] = field(default_factory=dict)
+    answer_policy: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

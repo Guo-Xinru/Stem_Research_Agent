@@ -21,6 +21,32 @@ REQUIRED_PROTOCOL_FIELDS = [
 ]
 
 
+DEFAULT_EVIDENCE_SELECTION: dict[str, Any] = {
+    "top_k_raw": 8,
+    "top_k_final": 3,
+    "min_question_token_overlap": 2,
+    "prefer_sections": [
+        "abstract",
+        "introduction",
+        "method",
+        "methods",
+        "experiment",
+        "experiments",
+        "results",
+        "conclusion",
+    ],
+    "discard_generic_snippets": True,
+}
+
+
+DEFAULT_ANSWER_POLICY: dict[str, Any] = {
+    "max_words": 80,
+    "require_evidence_grounding": True,
+    "avoid_unverifiable_claims": True,
+    "allow_insufficient_evidence_answer": True,
+}
+
+
 class Stem:
     """Creates an inspectable protocol from solved examples."""
 
@@ -127,6 +153,12 @@ def validate_protocol(protocol: Any) -> ResearchProtocol:
             raise ValueError(f"protocol field must be non-empty: {field}")
         cleaned[field] = items
 
+    cleaned["evidence_selection"] = _validate_evidence_selection(
+        protocol_data.get("evidence_selection", DEFAULT_EVIDENCE_SELECTION)
+    )
+    cleaned["answer_policy"] = _validate_answer_policy(
+        protocol_data.get("answer_policy", DEFAULT_ANSWER_POLICY)
+    )
     if str(cleaned["task_class"]) != "scientific_paper_qa":
         cleaned["task_class"] = "scientific_paper_qa"
     return ResearchProtocol(**cleaned)
@@ -147,6 +179,63 @@ def _validate_tool_policy(value: Any) -> dict[str, Any]:
         "when_to_use": str(value["when_to_use"]).strip(),
         "how_to_use": [str(item).strip() for item in how_to_use if str(item).strip()],
     }
+
+
+def _validate_evidence_selection(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("protocol evidence_selection must be an object")
+    merged = {**DEFAULT_EVIDENCE_SELECTION, **value}
+    top_k_raw = _positive_int(merged.get("top_k_raw"), field_name="evidence_selection.top_k_raw")
+    top_k_final = _positive_int(merged.get("top_k_final"), field_name="evidence_selection.top_k_final")
+    min_overlap = _non_negative_int(
+        merged.get("min_question_token_overlap"),
+        field_name="evidence_selection.min_question_token_overlap",
+    )
+    prefer_sections = merged.get("prefer_sections")
+    if not isinstance(prefer_sections, list):
+        raise ValueError("protocol evidence_selection.prefer_sections must be a list")
+    cleaned_sections = [str(item).strip().lower() for item in prefer_sections if str(item).strip()]
+    if not cleaned_sections:
+        cleaned_sections = list(DEFAULT_EVIDENCE_SELECTION["prefer_sections"])
+    return {
+        "top_k_raw": top_k_raw,
+        "top_k_final": min(top_k_final, top_k_raw),
+        "min_question_token_overlap": min_overlap,
+        "prefer_sections": cleaned_sections,
+        "discard_generic_snippets": bool(merged.get("discard_generic_snippets")),
+    }
+
+
+def _validate_answer_policy(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ValueError("protocol answer_policy must be an object")
+    merged = {**DEFAULT_ANSWER_POLICY, **value}
+    return {
+        "max_words": _positive_int(merged.get("max_words"), field_name="answer_policy.max_words"),
+        "require_evidence_grounding": bool(merged.get("require_evidence_grounding")),
+        "avoid_unverifiable_claims": bool(merged.get("avoid_unverifiable_claims")),
+        "allow_insufficient_evidence_answer": bool(merged.get("allow_insufficient_evidence_answer")),
+    }
+
+
+def _positive_int(value: Any, *, field_name: str) -> int:
+    try:
+        integer = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"protocol {field_name} must be an integer") from exc
+    if integer < 1:
+        raise ValueError(f"protocol {field_name} must be at least 1")
+    return integer
+
+
+def _non_negative_int(value: Any, *, field_name: str) -> int:
+    try:
+        integer = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"protocol {field_name} must be an integer") from exc
+    if integer < 0:
+        raise ValueError(f"protocol {field_name} must be non-negative")
+    return integer
 
 
 def _offline_protocol(
@@ -192,6 +281,8 @@ def _offline_protocol(
                 "If retrieved evidence does not answer the question, say that the paper evidence is insufficient.",
             ],
             "failure_modes": failure_modes,
+            "evidence_selection": DEFAULT_EVIDENCE_SELECTION,
+            "answer_policy": DEFAULT_ANSWER_POLICY,
         }
     )
 
@@ -259,6 +350,8 @@ def _protocol_user_prompt(
         },
         "verification_rules": ["concrete verification rule"],
         "failure_modes": ["concrete failure mode to avoid"],
+        "evidence_selection": DEFAULT_EVIDENCE_SELECTION,
+        "answer_policy": DEFAULT_ANSWER_POLICY,
     }
     return (
         "Generate a protocol for this task class.\n\n"

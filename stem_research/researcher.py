@@ -17,6 +17,30 @@ VALID_MODES: tuple[ResearchMode, ...] = (
     "baseline_with_tool",
     "specialized_with_protocol_and_tool",
 )
+BASELINE_TOOL_TOP_K = 3
+GENERIC_SNIPPET_TOKENS = {
+    "approach",
+    "contribution",
+    "experiment",
+    "experiments",
+    "method",
+    "methods",
+    "model",
+    "models",
+    "paper",
+    "propose",
+    "proposed",
+    "result",
+    "results",
+    "show",
+    "shows",
+    "study",
+    "task",
+    "tasks",
+    "use",
+    "used",
+    "using",
+}
 
 
 class SpecializedResearcher:
@@ -54,11 +78,24 @@ class SpecializedResearcher:
 
         safe_example = example.without_references()
         selected_evidence: list[EvidenceItem] = []
-        if mode in ("baseline_with_tool", "specialized_with_protocol_and_tool"):
+        if mode == "baseline_with_tool":
             selected_evidence = self.retriever.retrieve(
                 safe_example.question,
                 safe_example.context.sections,
-                top_k=top_k,
+                top_k=BASELINE_TOOL_TOP_K,
+            )
+        elif mode == "specialized_with_protocol_and_tool":
+            evidence_selection = protocol.evidence_selection if protocol else {}
+            raw_top_k = _int_policy_value(evidence_selection, "top_k_raw", default=max(8, top_k))
+            candidate_evidence = self.retriever.retrieve(
+                safe_example.question,
+                safe_example.context.sections,
+                top_k=raw_top_k,
+            )
+            selected_evidence = _select_evidence_with_protocol(
+                safe_example.question,
+                candidate_evidence,
+                protocol,
             )
 
         if self.run_mode == "llm":
@@ -141,6 +178,42 @@ def validate_research_output(
     )
 
 
+def _select_evidence_with_protocol(
+    question: str,
+    candidate_evidence: list[EvidenceItem],
+    protocol: ResearchProtocol | None,
+) -> list[EvidenceItem]:
+    """Apply deterministic protocol-guided evidence selection."""
+    if not candidate_evidence:
+        return []
+    evidence_selection = protocol.evidence_selection if protocol else {}
+    top_k_final = _int_policy_value(evidence_selection, "top_k_final", default=3)
+    min_overlap = _int_policy_value(evidence_selection, "min_question_token_overlap", default=2)
+    prefer_sections = [
+        str(item).strip().lower()
+        for item in evidence_selection.get("prefer_sections", [])
+        if str(item).strip()
+    ]
+    discard_generic = bool(evidence_selection.get("discard_generic_snippets", False))
+    question_tokens = normalized_tokens(question)
+
+    scored: list[tuple[float, int, int, EvidenceItem]] = []
+    for index, item in enumerate(candidate_evidence):
+        evidence_tokens = normalized_tokens(item.text)
+        overlap = len(question_tokens & evidence_tokens)
+        section_label = f"{item.section_name} {item.evidence_id or ''}".lower()
+        section_bonus = 1.5 if any(section in section_label for section in prefer_sections) else 0.0
+        generic_penalty = 2.0 if discard_generic and _is_generic_snippet(evidence_tokens) else 0.0
+        score = (overlap * 2.0) + section_bonus + (item.score * 0.1) - generic_penalty
+        scored.append((score, overlap, index, item))
+
+    filtered = [item for item in scored if item[1] >= min_overlap]
+    if not filtered:
+        filtered = scored
+    filtered.sort(key=lambda item: (-item[0], item[2]))
+    return [item[3] for item in filtered[:top_k_final]]
+
+
 def _offline_answer(
     *,
     example: QasperExample,
@@ -153,17 +226,25 @@ def _offline_answer(
         return _first_sentences(source_text, max_sentences=2) or "The paper context does not provide enough information to answer deterministically."
 
     if not selected_evidence:
-        return "The retrieved paper evidence is insufficient to answer the question."
+        return _insufficient_evidence_answer(protocol)
 
     evidence_text = " ".join(item.text for item in selected_evidence[:2])
     answer = _first_sentences(evidence_text, max_sentences=2)
     if mode == "baseline_with_tool":
         return answer or "The retrieved evidence does not clearly answer the question."
 
-    verification_note = ""
-    if protocol and _weakly_grounded(answer, selected_evidence):
-        verification_note = " The evidence is weak, so this answer should be treated as uncertain."
-    return (answer or "The selected evidence is insufficient for a confident answer.") + verification_note
+    answer_policy = protocol.answer_policy if protocol else {}
+    if (
+        protocol
+        and answer_policy.get("require_evidence_grounding", True)
+        and _weakly_grounded(answer, selected_evidence)
+    ):
+        if answer_policy.get("avoid_unverifiable_claims", True):
+            answer = _insufficient_evidence_answer(protocol)
+        else:
+            answer += " The evidence is weak, so this answer should be treated as uncertain."
+    answer = answer or _insufficient_evidence_answer(protocol)
+    return _apply_answer_policy(answer, protocol)
 
 
 def _best_context_text(example: QasperExample) -> str:
@@ -190,6 +271,38 @@ def _weakly_grounded(answer: str, evidence: list[EvidenceItem]) -> bool:
     if not answer_tokens:
         return True
     return len(answer_tokens & evidence_tokens) / len(answer_tokens) < 0.35
+
+
+def _is_generic_snippet(tokens: set[str]) -> bool:
+    if not tokens:
+        return True
+    specific_tokens = tokens - GENERIC_SNIPPET_TOKENS
+    return len(specific_tokens) <= 2
+
+
+def _int_policy_value(policy: dict[str, Any], key: str, *, default: int) -> int:
+    try:
+        value = int(policy.get(key, default))
+    except (TypeError, ValueError):
+        return default
+    return max(1, value)
+
+
+def _insufficient_evidence_answer(protocol: ResearchProtocol | None) -> str:
+    answer_policy = protocol.answer_policy if protocol else {}
+    if answer_policy.get("allow_insufficient_evidence_answer", True):
+        return "The selected paper evidence is insufficient for a confident answer."
+    return "The retrieved evidence does not clearly answer the question."
+
+
+def _apply_answer_policy(answer: str, protocol: ResearchProtocol | None) -> str:
+    if not protocol:
+        return answer
+    max_words = _int_policy_value(protocol.answer_policy, "max_words", default=80)
+    words = answer.split()
+    if len(words) <= max_words:
+        return answer
+    return " ".join(words[:max_words]).rstrip(" ,;:") + "."
 
 
 def _system_prompt(mode: ResearchMode) -> str:

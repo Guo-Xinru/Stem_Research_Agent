@@ -14,12 +14,14 @@ def main() -> int:
     parser.add_argument("--train-size", type=int, default=30)
     parser.add_argument("--eval-size", type=int, default=50)
     parser.add_argument("--seed", type=int, default=13)
+    parser.add_argument("--debug-schema", action="store_true")
     args = parser.parse_args()
     prepare_qasper_mini(
         output_dir=args.output_dir,
         train_size=args.train_size,
         eval_size=args.eval_size,
         seed=args.seed,
+        debug_schema=args.debug_schema,
     )
     return 0
 

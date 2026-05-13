@@ -24,6 +24,8 @@ def test_validate_protocol_accepts_required_fields() -> None:
 
     assert isinstance(protocol, ResearchProtocol)
     assert protocol.tool_policy["required_tool"] == "EvidenceRetrieverTool"
+    assert protocol.evidence_selection["top_k_raw"] == 8
+    assert protocol.answer_policy["max_words"] == 80
 
 
 def test_validate_protocol_rejects_missing_field() -> None:
@@ -44,6 +46,8 @@ def test_stem_generates_scientific_paper_protocol_offline() -> None:
     assert protocol.task_class == "scientific_paper_qa"
     assert protocol.tool_policy["required_tool"] == "EvidenceRetrieverTool"
     assert protocol.observed_question_types
+    assert protocol.evidence_selection["top_k_final"] == 3
+    assert protocol.answer_policy["require_evidence_grounding"] is True
     assert "answering from general ML knowledge instead of paper evidence" in protocol.failure_modes
 
 

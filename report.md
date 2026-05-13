@@ -26,7 +26,7 @@ The core method is protocol-level specialization. `Stem` reads solved examples a
 - failure modes to avoid
 - stopping and verification rules
 
-The most important change in the current experiment is that the protocol is not only shown to the researcher as text. It directly controls evidence selection in the specialized mode.
+The key design choice is that the protocol is not only shown to the researcher as text. In the current experiment, it directly controls evidence selection in the specialized mode.
 
 The three compared modes are:
 
@@ -34,7 +34,7 @@ The three compared modes are:
 2. `baseline_with_tool`: uses the local evidence retriever and answers from raw top-k evidence.
 3. `specialized_with_protocol_and_tool`: uses the same retriever, but applies protocol-guided evidence filtering before answering.
 
-This keeps the tool constant while testing whether the protocol adds behavior beyond retrieval.
+This keeps the retrieval tool constant while testing whether the protocol adds behavior beyond retrieval.
 
 ### 2.2 Architecture
 
@@ -50,7 +50,7 @@ The implementation intentionally avoids LangChain, vector databases, multi-agent
 
 ### 2.3 Evidence Retrieval and Protocol Execution
 
-The retriever is a simple deterministic keyword/overlap retriever, not a vector database. This is deliberate: the goal is not to maximize retrieval quality, but to make the experiment easy to inspect.
+The retriever is a simple deterministic keyword/overlap retriever, not a vector database. This is deliberate: the goal is not to maximize retrieval quality, but to keep the experiment easy to inspect.
 
 The baseline-with-tool mode uses raw retriever output directly.
 
@@ -108,19 +108,27 @@ The metrics are heuristic and deterministic. They are useful for comparison, but
 
 The largest improvement comes from adding the retrieval tool. Compared with `baseline_no_tool`, `baseline_with_tool` improves answer F1, evidence recall, evidence precision, and unsupported-claim count.
 
-The specialized mode now behaves differently from the tool baseline. It improves evidence precision from `0.1767` to `0.1900`, but evidence recall drops from `0.3212` to `0.2962`, and answer F1 drops slightly from `0.0817` to `0.0777`.
+The specialized mode behaves differently from the tool baseline. It improves evidence precision from `0.1767` to `0.1900`, but evidence recall drops from `0.3212` to `0.2962`, and answer F1 drops slightly from `0.0817` to `0.0777`.
 
 This means the protocol acted as a conservative evidence filter. It made evidence selection more selective, but did not improve overall answer quality in this run.
 
-## 4. Interpretation
+## 4. Experimental Iteration and Interpretation
 
-The experiment supports three conclusions.
+The first QASPER-mini version did not behave as I expected. The retrieval tool clearly helped, but `baseline_with_tool` and `specialized_with_protocol_and_tool` produced almost identical results. That meant the experiment was mostly measuring the value of retrieval, not the value of protocol-level specialization.
 
-First, retrieval is essential. Without tools, the researcher has no evidence recall and produces more unsupported claims.
+I treated this as an experimental design problem rather than a performance problem. The generated protocol was explicit and inspectable, but in offline mode it did not sufficiently control the researcher’s behavior. The specialized condition existed, but the treatment was too weak to measure.
 
-Second, protocol specialization is now real and measurable. The specialized mode no longer behaves identically to the tool baseline; it uses protocol fields to change evidence selection and answer length.
+I made a minimal correction. The protocol now contains executable evidence-selection and answer-policy fields. The specialized researcher retrieves a larger candidate set and applies protocol-guided deterministic filtering before answering. The tool baseline still uses the same retriever, but only consumes raw top-k evidence. I did not change the evaluator, reference answers, or gold evidence.
 
-Third, specialization is not automatically beneficial. The protocol improved evidence precision but reduced recall and slightly lowered lexical answer F1. This is a useful negative result: an inspectable protocol can change behavior, but better specialization requires better protocol design, retrieval quality, and evaluation.
+After this change, the specialized mode produced a measurable behavioral difference. The result is mixed: evidence precision improved, but recall and answer token F1 decreased. This did not match the strongest hoped-for outcome. The protocol did not make the researcher broadly better; it made the researcher more conservative.
+
+This is still useful. It shows that protocol-level specialization needs an executable behavioral role. A valid JSON protocol or a better-looking prompt is not enough. The protocol must actually change how the agent selects evidence, verifies claims, or structures answers.
+
+The experiment therefore supports three conclusions:
+
+1. Retrieval is essential. Without tools, the researcher has no evidence recall and produces more unsupported claims.
+2. Protocol specialization is now real and measurable. The specialized mode no longer behaves identically to the tool baseline.
+3. Specialization is not automatically beneficial. In this run, it created a precision/recall trade-off rather than a clear quality improvement.
 
 ## 5. What Worked and What Failed
 

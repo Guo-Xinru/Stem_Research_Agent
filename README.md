@@ -1,140 +1,94 @@
 # StemResearch
 
-StemResearch is a minimal experiment in explicit protocol-based specialization. It is not a general agent framework, web-search system, or multi-agent app.
+The full write-up is in [`report.md`](report.md).
 
-The main experiment asks whether a Stem-generated protocol, learned from solved scientific-paper QA examples, improves behavior compared with generic baselines.
+StemResearch is a minimal prototype for protocol-level specialization in research agents.
+A `Stem` generates an explicit `ResearchProtocol` from solved examples, and the system compares generic vs protocol-guided researchers on QASPER-mini scientific QA.
 
-## Architecture
-
-The code keeps three conceptual modules:
-
-- `Stem`: observes solved examples and generates an explicit JSON research protocol.
-- `SpecializedResearcher`: answers the same eval questions in three comparison modes.
-- `Evaluator`: reports concrete, non-holistic metrics.
-
-Small support files handle JSONL loading, a deterministic local evidence retriever, OpenAI-compatible calls, and CLI plumbing.
-
-## Main Experiment: QASPER-Mini
-
-QASPER is used because it provides an external scientific-paper QA task distribution with reference answers and evidence annotations. The local QASPER-mini subset is intended to contain:
-
-- 30 train solved examples for Stem protocol generation
-- 50 eval questions for the baseline vs specialized comparison
-
-The researcher never sees eval `reference_answer` or gold `evidence`. The evaluator uses them only during scoring.
-
-Expected local files:
+## Core Idea
 
 ```text
-data/qasper_mini/train.jsonl
-data/qasper_mini/eval.jsonl
+solved examples -> Stem-generated protocol -> baseline vs specialized researcher -> evaluation
 ```
 
-## Prepare Data
+The experiment compares three modes:
 
-The main CLI does not require HuggingFace or network access if the JSONL files already exist. To generate them from HuggingFace QASPER:
+| mode                                 | tool use | protocol use | implementation logic                                                                                                                         |
+| ------------------------------------ | -------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseline_no_tool`                   | no       | no           | Answers directly from the question/context without evidence retrieval.                                                                       |
+| `baseline_with_tool`                 | yes      | no           | Uses `EvidenceRetrieverTool` to retrieve raw top-3 evidence snippets, then answers from them.                                                |
+| `specialized_with_protocol_and_tool` | yes      | yes          | Uses the same retriever, retrieves more raw candidates, then applies the Stem-generated protocol to rerank/filter evidence before answering. |
+
+In short, baseline_no_tool tests the no-retrieval baseline, baseline_with_tool tests whether retrieval helps, and specialized_with_protocol_and_tool tests whether the generated protocol adds behavior beyond using the same retrieval tool.
+
+The project focuses on a small, inspectable experiment rather than a fully autonomous agent. No LangChain, vector database, web search, multi-agent orchestration, or evaluator-driven revision.
+
+## Components
+
+- `Stem`: generates `ResearchProtocol`
+- `SpecializedResearcher`: answers in baseline or protocol-guided mode
+- `Evaluator`: scores answers against hidden references and evidence
+- `EvidenceRetrieverTool`: simple deterministic local retriever
+
+## Setup
 
 ```bash
-uv run python scripts/prepare_qasper_mini.py
+uv sync
 ```
 
-Equivalent CLI command:
-
-```bash
-uv run python -m stemresearch.cli prepare-qasper-mini
-```
-
-If `datasets` is not installed, the script fails with a clear message. The runtime experiment itself does not depend on `datasets`.
-
-## Run Offline
-
-Offline mode is deterministic and is the default recommended smoke path:
-
-```bash
-uv run python -m stemresearch.cli run-qasper --data data/qasper_mini --run-mode offline
-```
-
-Outputs:
-
-```text
-outputs/qasper_protocol.json
-outputs/qasper_predictions.jsonl
-outputs/qasper_metrics.json
-```
-
-If local QASPER-mini files are missing, the command tells you to run the preparation script.
-
-## Run OpenAI-Compatible LLM Mode
-
-Only OpenAI-compatible API mode is supported.
-
-Environment variables:
-
-```text
-OPENAI_API_KEY=...
-OPENAI_MODEL=...
-OPENAI_BASE_URL=...
-```
-
-`OPENAI_MODEL` defaults to the model in `stem_research/llm.py`. `OPENAI_BASE_URL` is optional.
-
-Run:
-
-```bash
-uv run python -m stemresearch.cli run-qasper --data data/qasper_mini --run-mode llm
-```
-
-If LLM mode is requested without `OPENAI_API_KEY`, it fails clearly.
-
-## Compared Modes
-
-- `baseline_no_tool`: generic paper QA using question plus paper context, without the retriever.
-- `baseline_with_tool`: generic paper QA using the deterministic local `EvidenceRetrieverTool`.
-- `specialized_with_protocol_and_tool`: uses the same retriever plus the Stem-generated protocol.
-
-The two tool modes get the same paper context and retriever. Their main difference is protocol access.
-
-## Metrics
-
-The evaluator reports per-example and aggregate metrics by mode:
-
-- `answer_token_f1`
-- `evidence_recall`
-- `evidence_precision`
-- `unsupported_claim_count`
-- `protocol_adherence`
-- `answer_length_words`
-
-`protocol_adherence` is only meaningful for `specialized_with_protocol_and_tool`; the other modes report it as not applicable.
-
-## AI-Engineering Demo
-
-The AI-engineering mini-set is retained as a small domain demo aligned with the JetBrains task:
-
-```bash
-uv run python -m stemresearch.cli run-ai-demo --run-mode offline
-```
-
-It is not the main statistical experiment.
-
-## Evaluate Existing Predictions
-
-```bash
-uv run python -m stemresearch.cli evaluate \
-  --predictions outputs/qasper_predictions.jsonl \
-  --data data/qasper_mini/eval.jsonl
-```
-
-## Tests
+## Run Tests
 
 ```bash
 uv run pytest
 ```
 
-## Limitations
+Expected:
 
-- QASPER is single-paper QA, not multi-source research synthesis.
-- Evidence matching is heuristic.
-- Offline mode is deterministic and not a real LLM agent.
-- No evaluator-driven protocol revision is performed.
-- No web search, vector database, persistent memory, LangChain, LangGraph, CrewAI, AutoGen, MCP, browser automation, or multi-agent orchestration is used.
+```text
+25 passed
+```
+
+## Run Main Experiment
+
+```bash
+uv run python -m stemresearch.cli run-qasper \
+  --data data/qasper_mini \
+  --run-mode offline \
+  --output-dir outputs/qasper_protocol_selection_full
+```
+
+## Results
+
+Latest QASPER-mini offline run:
+
+| mode                               | answer_f1 | evidence_recall | evidence_precision | unsupported_claims |
+| ---------------------------------- | --------: | --------------: | -----------------: | -----------------: |
+| baseline_no_tool                   |    0.0595 |          0.0000 |             0.0000 |             2.0000 |
+| baseline_with_tool                 |    0.0817 |          0.3212 |             0.1767 |             0.0400 |
+| specialized_with_protocol_and_tool |    0.0777 |          0.2962 |             0.1900 |             0.0400 |
+
+Interpretation: retrieval gives the largest gain. The protocol-guided mode changes behavior and improves evidence precision, but lowers recall and answer F1 in this run.
+
+## Useful Commands
+
+Run a small smoke test:
+
+```bash
+uv run python -m stemresearch.cli run-qasper \
+  --data data/qasper_mini \
+  --run-mode offline \
+  --limit 3 \
+  --output-dir outputs/smoke
+```
+
+Regenerate QASPER-mini data:
+
+```bash
+uv run python -m stemresearch.cli prepare-qasper-mini
+```
+
+Run older AI-engineering demo:
+
+```bash
+uv run python -m stemresearch.cli run-ai-demo
+```
